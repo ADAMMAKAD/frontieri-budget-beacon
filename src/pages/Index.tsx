@@ -29,7 +29,7 @@ const Index = () => {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
-      <SidebarProvider collapsedWidth={56}>
+      <SidebarProvider>
         <div className="flex min-h-screen w-full">
           <AppSidebar activeSection={activeSection} setActiveSection={setActiveSection} />
           <div className="flex-1 flex flex-col">

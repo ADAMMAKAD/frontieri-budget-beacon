@@ -29,12 +29,13 @@ interface AppSidebarProps {
 }
 
 export function AppSidebar({ activeSection, setActiveSection }: AppSidebarProps) {
-  const { collapsed } = useSidebar();
+  const { state } = useSidebar();
+  const isCollapsed = state === "collapsed";
 
   return (
-    <Sidebar className={`border-r border-gray-200 bg-white/80 backdrop-blur-sm ${collapsed ? "w-14" : "w-64"}`}>
+    <Sidebar className={`border-r border-gray-200 bg-white/80 backdrop-blur-sm ${isCollapsed ? "w-14" : "w-64"}`}>
       <SidebarHeader className="border-b border-gray-200 p-4">
-        {!collapsed && (
+        {!isCollapsed && (
           <div className="flex items-center space-x-2">
             <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">F</span>
@@ -51,7 +52,7 @@ export function AppSidebar({ activeSection, setActiveSection }: AppSidebarProps)
       <SidebarContent>
         <SidebarGroup>
           <SidebarGroupLabel className="text-gray-600 font-medium">
-            {!collapsed && "Project Budget Management"}
+            {!isCollapsed && "Project Budget Management"}
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
@@ -65,8 +66,8 @@ export function AppSidebar({ activeSection, setActiveSection }: AppSidebarProps)
                         : "hover:bg-gray-100 text-gray-700"
                     }`}
                   >
-                    <item.icon className={`h-4 w-4 ${collapsed ? "mx-auto" : "mr-3"}`} />
-                    {!collapsed && <span className="font-medium">{item.title}</span>}
+                    <item.icon className={`h-4 w-4 ${isCollapsed ? "mx-auto" : "mr-3"}`} />
+                    {!isCollapsed && <span className="font-medium">{item.title}</span>}
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               ))}
@@ -79,8 +80,8 @@ export function AppSidebar({ activeSection, setActiveSection }: AppSidebarProps)
             <SidebarMenu>
               <SidebarMenuItem>
                 <SidebarMenuButton className="text-gray-700 hover:bg-gray-100">
-                  <Settings className={`h-4 w-4 ${collapsed ? "mx-auto" : "mr-3"}`} />
-                  {!collapsed && <span>Settings</span>}
+                  <Settings className={`h-4 w-4 ${isCollapsed ? "mx-auto" : "mr-3"}`} />
+                  {!isCollapsed && <span>Settings</span>}
                 </SidebarMenuButton>
               </SidebarMenuItem>
             </SidebarMenu>
