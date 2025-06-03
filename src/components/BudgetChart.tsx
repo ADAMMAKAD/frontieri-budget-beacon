@@ -31,9 +31,9 @@ export function BudgetChart() {
           <BarChart data={monthlyData}>
             <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
             <XAxis dataKey="month" stroke="#6b7280" />
-            <YAxis stroke="#6b7280" tickFormatter={(value) => `$${value / 1000}k`} />
+            <YAxis stroke="#6b7280" tickFormatter={(value) => `R$${(value / 1000).toLocaleString('pt-BR')}k`} />
             <Tooltip
-              formatter={(value: number) => [`$${value.toLocaleString()}`, ""]}
+              formatter={(value: number) => [`R$${value.toLocaleString('pt-BR')}`, ""]}
               labelStyle={{ color: "#374151" }}
               contentStyle={{
                 backgroundColor: "white",

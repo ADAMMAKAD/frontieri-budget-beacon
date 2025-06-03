@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, DollarSign, FileText, AlertTriangle } from "lucide-react";
@@ -9,7 +8,7 @@ const activities = [
     type: "budget_approval",
     title: "Budget Approved",
     description: "Project Alpha Q2 budget approved by Finance",
-    amount: "$450,000",
+    amount: "R$450.000",
     time: "2 hours ago",
     icon: DollarSign,
     status: "approved"
@@ -19,7 +18,7 @@ const activities = [
     type: "expense_submitted",
     title: "Expense Report Submitted",
     description: "Marketing campaign expenses for Project Beta",
-    amount: "$12,500",
+    amount: "R$12.500",
     time: "4 hours ago",
     icon: FileText,
     status: "pending"
@@ -29,7 +28,7 @@ const activities = [
     type: "budget_alert",
     title: "Budget Alert",
     description: "Project Gamma approaching 90% budget utilization",
-    amount: "$315,000",
+    amount: "R$315.000",
     time: "6 hours ago",
     icon: AlertTriangle,
     status: "warning"
@@ -39,7 +38,7 @@ const activities = [
     type: "budget_allocated",
     title: "Budget Allocated",
     description: "New resources allocated to Project Delta",
-    amount: "$75,000",
+    amount: "R$75.000",
     time: "1 day ago",
     icon: DollarSign,
     status: "allocated"

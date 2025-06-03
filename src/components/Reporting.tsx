@@ -117,13 +117,13 @@ Generated on: ${new Date().toLocaleDateString()}
 
 Summary:
 - Total Projects: ${reportData.totalProjects}
-- Total Budget: $${reportData.totalBudget.toLocaleString()}
-- Total Spent: $${reportData.totalSpent.toLocaleString()}
+- Total Budget: R$${reportData.totalBudget.toLocaleString('pt-BR')}
+- Total Spent: R$${reportData.totalSpent.toLocaleString('pt-BR')}
 - Budget Utilization: ${reportData.budgetUtilization.toFixed(1)}%
 
 Budget Categories:
 ${reportData.categories.map(cat => 
-  `- ${cat.name}: $${cat.spent_amount.toLocaleString()} / $${cat.allocated_amount.toLocaleString()} (${cat.allocated_amount > 0 ? ((cat.spent_amount / cat.allocated_amount) * 100).toFixed(1) : 0}%)`
+  `- ${cat.name}: R$${cat.spent_amount.toLocaleString('pt-BR')} / R$${cat.allocated_amount.toLocaleString('pt-BR')} (${cat.allocated_amount > 0 ? ((cat.spent_amount / cat.allocated_amount) * 100).toFixed(1) : 0}%)`
 ).join('\n')}
     `;
 
@@ -200,7 +200,7 @@ ${reportData.categories.map(cat =>
               <BarChart3 className="h-5 w-5 text-green-600" />
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Budget</p>
-                <p className="text-2xl font-bold">${reportData.totalBudget.toLocaleString()}</p>
+                <p className="text-2xl font-bold">R${reportData.totalBudget.toLocaleString('pt-BR')}</p>
               </div>
             </div>
           </CardContent>
@@ -212,7 +212,7 @@ ${reportData.categories.map(cat =>
               <TrendingUp className="h-5 w-5 text-red-600" />
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Spent</p>
-                <p className="text-2xl font-bold">${reportData.totalSpent.toLocaleString()}</p>
+                <p className="text-2xl font-bold">R${reportData.totalSpent.toLocaleString('pt-BR')}</p>
               </div>
             </div>
           </CardContent>
@@ -244,7 +244,7 @@ ${reportData.categories.map(cat =>
                   <div className="flex-1">
                     <h4 className="font-medium">{category.name}</h4>
                     <p className="text-sm text-gray-600">
-                      ${category.spent_amount.toLocaleString()} of ${category.allocated_amount.toLocaleString()}
+                      R${category.spent_amount.toLocaleString('pt-BR')} of R${category.allocated_amount.toLocaleString('pt-BR')}
                     </p>
                     <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
                       <div 
@@ -293,7 +293,7 @@ ${reportData.categories.map(cat =>
               <h4 className="font-medium text-green-900">Financial Overview</h4>
               <p className="text-sm text-green-700 mt-1">
                 Total budget allocated across {reportData.totalProjects} project(s) with 
-                ${(reportData.totalBudget - reportData.totalSpent).toLocaleString()} remaining.
+                R${(reportData.totalBudget - reportData.totalSpent).toLocaleString('pt-BR')} remaining.
               </p>
             </div>
           </div>

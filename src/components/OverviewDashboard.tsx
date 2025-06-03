@@ -10,21 +10,21 @@ export function OverviewDashboard() {
   const budgetMetrics = [
     {
       title: "Total Budget",
-      value: "$2,450,000",
+      value: "R$2.450.000",
       change: "+12.5%",
       trend: "up",
       description: "Across all projects"
     },
     {
       title: "Allocated Budget",
-      value: "$1,890,000",
+      value: "R$1.890.000",
       change: "+8.2%",
       trend: "up",
       description: "77% of total budget"
     },
     {
       title: "Remaining Budget",
-      value: "$560,000",
+      value: "R$560.000",
       change: "-4.1%",
       trend: "down",
       description: "23% available"
@@ -133,8 +133,8 @@ export function OverviewDashboard() {
                   </div>
                   <div className="space-y-2">
                     <div className="flex justify-between text-sm text-gray-600">
-                      <span>Budget: ${project.budget.toLocaleString()}</span>
-                      <span>Spent: ${project.spent.toLocaleString()}</span>
+                      <span>Budget: R${project.budget.toLocaleString('pt-BR')}</span>
+                      <span>Spent: R${project.spent.toLocaleString('pt-BR')}</span>
                     </div>
                     <Progress value={utilization} className="h-2" />
                     <p className="text-xs text-gray-500">{utilization.toFixed(1)}% utilized</p>

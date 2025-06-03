@@ -179,7 +179,7 @@ const BudgetAllocation = () => {
                 <DollarSign className="h-5 w-5 text-blue-600" />
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Budget</p>
-                  <p className="text-2xl font-bold">${selectedProjectData.total_budget?.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">R${selectedProjectData.total_budget?.toLocaleString('pt-BR')}</p>
                 </div>
               </div>
             </CardContent>
@@ -191,7 +191,7 @@ const BudgetAllocation = () => {
                 <PieChart className="h-5 w-5 text-green-600" />
                 <div>
                   <p className="text-sm font-medium text-gray-600">Allocated</p>
-                  <p className="text-2xl font-bold">${totalAllocated.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">R${totalAllocated.toLocaleString('pt-BR')}</p>
                 </div>
               </div>
             </CardContent>
@@ -203,7 +203,7 @@ const BudgetAllocation = () => {
                 <DollarSign className="h-5 w-5 text-orange-600" />
                 <div>
                   <p className="text-sm font-medium text-gray-600">Remaining</p>
-                  <p className="text-2xl font-bold">${remainingBudget.toLocaleString()}</p>
+                  <p className="text-2xl font-bold">R${remainingBudget.toLocaleString('pt-BR')}</p>
                 </div>
               </div>
             </CardContent>
@@ -269,11 +269,11 @@ const BudgetAllocation = () => {
                   <div>
                     <h4 className="font-medium">{category.name}</h4>
                     <p className="text-sm text-gray-600">
-                      Spent: ${category.spent_amount?.toLocaleString()} of ${category.allocated_amount?.toLocaleString()}
+                      Spent: R${category.spent_amount?.toLocaleString('pt-BR')} of R${category.allocated_amount?.toLocaleString('pt-BR')}
                     </p>
                   </div>
                   <div className="text-right">
-                    <p className="font-semibold">${category.allocated_amount?.toLocaleString()}</p>
+                    <p className="font-semibold">R${category.allocated_amount?.toLocaleString('pt-BR')}</p>
                     <div className="w-32 bg-gray-200 rounded-full h-2 mt-1">
                       <div 
                         className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full" 

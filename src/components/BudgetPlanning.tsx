@@ -220,7 +220,7 @@ const BudgetPlanning = () => {
               </div>
               <div className="flex items-center space-x-2 text-sm text-gray-600">
                 <DollarSign className="h-4 w-4" />
-                <span>Budget: ${project.total_budget?.toLocaleString()}</span>
+                <span>Budget: R${project.total_budget?.toLocaleString('pt-BR')}</span>
               </div>
               <div className="flex items-center space-x-2 text-sm text-gray-600">
                 <Users className="h-4 w-4" />
@@ -235,7 +235,7 @@ const BudgetPlanning = () => {
                 ></div>
               </div>
               <div className="text-xs text-gray-500">
-                Spent: ${project.spent_budget?.toLocaleString()} of ${project.total_budget?.toLocaleString()}
+                Spent: R${project.spent_budget?.toLocaleString('pt-BR')} of R${project.total_budget?.toLocaleString('pt-BR')}
               </div>
             </CardContent>
           </Card>
