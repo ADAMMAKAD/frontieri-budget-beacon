@@ -9,7 +9,170 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      budget_categories: {
+        Row: {
+          allocated_amount: number | null
+          created_at: string | null
+          id: string
+          name: string
+          project_id: string | null
+          spent_amount: number | null
+        }
+        Insert: {
+          allocated_amount?: number | null
+          created_at?: string | null
+          id?: string
+          name: string
+          project_id?: string | null
+          spent_amount?: number | null
+        }
+        Update: {
+          allocated_amount?: number | null
+          created_at?: string | null
+          id?: string
+          name?: string
+          project_id?: string | null
+          spent_amount?: number | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_categories_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      expenses: {
+        Row: {
+          amount: number
+          approved_by: string | null
+          category_id: string | null
+          created_at: string | null
+          description: string
+          expense_date: string | null
+          id: string
+          project_id: string | null
+          status: string | null
+          submitted_by: string | null
+        }
+        Insert: {
+          amount: number
+          approved_by?: string | null
+          category_id?: string | null
+          created_at?: string | null
+          description: string
+          expense_date?: string | null
+          id?: string
+          project_id?: string | null
+          status?: string | null
+          submitted_by?: string | null
+        }
+        Update: {
+          amount?: number
+          approved_by?: string | null
+          category_id?: string | null
+          created_at?: string | null
+          description?: string
+          expense_date?: string | null
+          id?: string
+          project_id?: string | null
+          status?: string | null
+          submitted_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "expenses_category_id_fkey"
+            columns: ["category_id"]
+            isOneToOne: false
+            referencedRelation: "budget_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "expenses_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      profiles: {
+        Row: {
+          created_at: string | null
+          department: string | null
+          full_name: string | null
+          id: string
+          role: string | null
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          department?: string | null
+          full_name?: string | null
+          id: string
+          role?: string | null
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          department?: string | null
+          full_name?: string | null
+          id?: string
+          role?: string | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      projects: {
+        Row: {
+          allocated_budget: number | null
+          created_at: string | null
+          department: string | null
+          description: string | null
+          end_date: string | null
+          id: string
+          name: string
+          project_manager_id: string | null
+          spent_budget: number | null
+          start_date: string | null
+          status: string | null
+          total_budget: number | null
+          updated_at: string | null
+        }
+        Insert: {
+          allocated_budget?: number | null
+          created_at?: string | null
+          department?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          name: string
+          project_manager_id?: string | null
+          spent_budget?: number | null
+          start_date?: string | null
+          status?: string | null
+          total_budget?: number | null
+          updated_at?: string | null
+        }
+        Update: {
+          allocated_budget?: number | null
+          created_at?: string | null
+          department?: string | null
+          description?: string | null
+          end_date?: string | null
+          id?: string
+          name?: string
+          project_manager_id?: string | null
+          spent_budget?: number | null
+          start_date?: string | null
+          status?: string | null
+          total_budget?: number | null
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

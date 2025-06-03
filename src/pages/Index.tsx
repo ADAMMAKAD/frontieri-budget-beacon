@@ -1,27 +1,58 @@
 
+import { useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { OverviewDashboard } from "@/components/OverviewDashboard";
+import BudgetPlanning from "@/components/BudgetPlanning";
+import BudgetAllocation from "@/components/BudgetAllocation";
+import BudgetTracking from "@/components/BudgetTracking";
+import Reporting from "@/components/Reporting";
+import AuditCompliance from "@/components/AuditCompliance";
+import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
 
 const Index = () => {
   const [activeSection, setActiveSection] = useState("overview");
+  const { user, loading } = useAuth();
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    if (!loading && !user) {
+      navigate('/auth');
+    }
+  }, [user, loading, navigate]);
+
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!user) {
+    return null;
+  }
 
   const renderContent = () => {
     switch (activeSection) {
       case "overview":
         return <OverviewDashboard />;
       case "planning":
-        return <div className="p-6"><h2 className="text-2xl font-bold">Budget Planning</h2><p className="text-gray-600 mt-2">Budget planning tools coming soon...</p></div>;
+        return <BudgetPlanning />;
       case "allocation":
-        return <div className="p-6"><h2 className="text-2xl font-bold">Budget Allocation</h2><p className="text-gray-600 mt-2">Allocation management coming soon...</p></div>;
+        return <BudgetAllocation />;
       case "tracking":
-        return <div className="p-6"><h2 className="text-2xl font-bold">Budget Tracking</h2><p className="text-gray-600 mt-2">Real-time tracking coming soon...</p></div>;
+        return <BudgetTracking />;
       case "reporting":
-        return <div className="p-6"><h2 className="text-2xl font-bold">Reporting</h2><p className="text-gray-600 mt-2">Advanced reporting coming soon...</p></div>;
+        return <Reporting />;
       case "audit":
-        return <div className="p-6"><h2 className="text-2xl font-bold">Audit Compliance</h2><p className="text-gray-600 mt-2">Audit trail and compliance tools coming soon...</p></div>;
+        return <AuditCompliance />;
       default:
         return <OverviewDashboard />;
     }
