@@ -10,6 +10,8 @@ import BudgetAllocation from "@/components/BudgetAllocation";
 import BudgetTracking from "@/components/BudgetTracking";
 import Reporting from "@/components/Reporting";
 import AuditCompliance from "@/components/AuditCompliance";
+import ProfileManagement from "@/components/ProfileManagement";
+import ExpenseManagement from "@/components/ExpenseManagement";
 import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
 
@@ -53,6 +55,10 @@ const Index = () => {
         return <Reporting />;
       case "audit":
         return <AuditCompliance />;
+      case "profile":
+        return <ProfileManagement />;
+      case "expenses":
+        return <ExpenseManagement />;
       default:
         return <OverviewDashboard />;
     }
