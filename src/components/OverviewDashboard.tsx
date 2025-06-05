@@ -1,30 +1,32 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, DollarSign, AlertTriangle, CheckCircle } from "lucide-react";
 import { BudgetChart } from "@/components/BudgetChart";
 import { RecentActivity } from "@/components/RecentActivity";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 export function OverviewDashboard() {
+  const { formatCurrency } = useCurrency();
+
   const budgetMetrics = [
     {
       title: "Total Budget",
-      value: "R$2.450.000",
+      value: formatCurrency(2450000),
       change: "+12.5%",
       trend: "up",
       description: "Across all projects"
     },
     {
       title: "Allocated Budget",
-      value: "R$1.890.000",
+      value: formatCurrency(1890000),
       change: "+8.2%",
       trend: "up",
       description: "77% of total budget"
     },
     {
       title: "Remaining Budget",
-      value: "R$560.000",
+      value: formatCurrency(560000),
       change: "-4.1%",
       trend: "down",
       description: "23% available"
@@ -48,7 +50,7 @@ export function OverviewDashboard() {
   return (
     <div className="p-6 space-y-6">
       {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white">
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white dark:from-blue-700 dark:to-purple-700">
         <h1 className="text-3xl font-bold mb-2">Welcome to Frontieri PBMS</h1>
         <p className="text-blue-100 text-lg">
           Project Budget Management System - Your centralized financial control center
@@ -58,10 +60,10 @@ export function OverviewDashboard() {
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {budgetMetrics.map((metric, index) => (
-          <Card key={index} className="border-0 shadow-lg bg-white/80 backdrop-blur-sm hover:shadow-xl transition-shadow duration-300">
+          <Card key={index} className="border-0 shadow-lg bg-card hover:shadow-xl transition-shadow duration-300">
             <CardHeader className="pb-3">
               <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-gray-600">{metric.title}</CardTitle>
+                <CardTitle className="text-sm font-medium text-muted-foreground">{metric.title}</CardTitle>
                 {metric.trend === "up" ? (
                   <TrendingUp className="h-4 w-4 text-green-500" />
                 ) : (
@@ -71,12 +73,12 @@ export function OverviewDashboard() {
             </CardHeader>
             <CardContent>
               <div className="space-y-2">
-                <p className="text-2xl font-bold text-gray-900">{metric.value}</p>
+                <p className="text-2xl font-bold">{metric.value}</p>
                 <div className="flex items-center space-x-2">
                   <Badge variant={metric.trend === "up" ? "default" : "destructive"} className="text-xs">
                     {metric.change}
                   </Badge>
-                  <p className="text-sm text-gray-500">{metric.description}</p>
+                  <p className="text-sm text-muted-foreground">{metric.description}</p>
                 </div>
               </div>
             </CardContent>
@@ -91,7 +93,7 @@ export function OverviewDashboard() {
       </div>
 
       {/* Project Status */}
-      <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
+      <Card className="border-0 shadow-lg bg-card">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <DollarSign className="h-5 w-5 text-blue-600" />
@@ -121,10 +123,10 @@ export function OverviewDashboard() {
               };
 
               return (
-                <div key={index} className="p-4 rounded-lg bg-gray-50 hover:bg-gray-100 transition-colors duration-200">
+                <div key={index} className="p-4 rounded-lg bg-muted hover:bg-muted/80 transition-colors duration-200">
                   <div className="flex items-center justify-between mb-2">
                     <div className="flex items-center space-x-2">
-                      <h4 className="font-medium text-gray-900">{project.name}</h4>
+                      <h4 className="font-medium">{project.name}</h4>
                       {getStatusIcon(project.status)}
                     </div>
                     <Badge variant="outline" className={getStatusColor(project.status)}>
@@ -132,12 +134,12 @@ export function OverviewDashboard() {
                     </Badge>
                   </div>
                   <div className="space-y-2">
-                    <div className="flex justify-between text-sm text-gray-600">
-                      <span>Budget: R${project.budget.toLocaleString('pt-BR')}</span>
-                      <span>Spent: R${project.spent.toLocaleString('pt-BR')}</span>
+                    <div className="flex justify-between text-sm text-muted-foreground">
+                      <span>Budget: {formatCurrency(project.budget)}</span>
+                      <span>Spent: {formatCurrency(project.spent)}</span>
                     </div>
                     <Progress value={utilization} className="h-2" />
-                    <p className="text-xs text-gray-500">{utilization.toFixed(1)}% utilized</p>
+                    <p className="text-xs text-muted-foreground">{utilization.toFixed(1)}% utilized</p>
                   </div>
                 </div>
               );

@@ -1,35 +1,62 @@
 
-import { Bell, Search, User } from "lucide-react";
+import { Bell, Search, User, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
+import { SidebarTrigger } from "@/components/ui/sidebar";
+import { useAuth } from "@/hooks/useAuth";
+import { SettingsDialog } from "@/components/SettingsDialog";
 
 export function DashboardHeader() {
-  return (
-    <header className="h-16 border-b border-gray-200 bg-white/80 backdrop-blur-sm px-6 flex items-center justify-between">
-      <div className="flex items-center space-x-4 flex-1">
-        <div className="relative flex-1 max-w-md">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Search projects, budgets, or reports..."
-            className="pl-10 bg-gray-50/50 border-gray-200 focus:border-blue-500 focus:ring-blue-500"
-          />
-        </div>
-      </div>
+  const { user, signOut } = useAuth();
 
-      <div className="flex items-center space-x-4">
-        <Button variant="ghost" size="sm" className="relative">
-          <Bell className="h-5 w-5 text-gray-600" />
-          <span className="absolute -top-1 -right-1 w-3 h-3 bg-red-500 rounded-full text-xs"></span>
-        </Button>
+  return (
+    <header className="sticky top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
+      <div className="container flex h-14 items-center px-4">
+        <SidebarTrigger className="mr-4" />
         
-        <div className="flex items-center space-x-3">
-          <div className="text-right">
-            <p className="text-sm font-medium text-gray-900">John Doe</p>
-            <p className="text-xs text-gray-500">Budget Manager</p>
+        <div className="flex flex-1 items-center space-x-4">
+          <div className="relative flex-1 max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search projects, budgets..."
+              className="pl-9"
+            />
           </div>
-          <Button variant="ghost" size="sm" className="rounded-full p-2">
-            <User className="h-5 w-5 text-gray-600" />
+        </div>
+
+        <div className="flex items-center space-x-4">
+          <SettingsDialog />
+          
+          <Button variant="outline" size="icon">
+            <Bell className="h-4 w-4" />
           </Button>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" className="relative h-8 w-8 rounded-full">
+                <Avatar className="h-8 w-8">
+                  <AvatarFallback>
+                    {user?.email?.charAt(0).toUpperCase() || 'U'}
+                  </AvatarFallback>
+                </Avatar>
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent className="w-56" align="end" forceMount>
+              <DropdownMenuItem className="flex items-center space-x-2">
+                <User className="h-4 w-4" />
+                <span>Profile</span>
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                className="flex items-center space-x-2 text-red-600"
+                onClick={signOut}
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Sign out</span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
     </header>

@@ -1,6 +1,7 @@
 
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const monthlyData = [
   { month: "Jan", planned: 400000, actual: 380000 },
@@ -20,8 +21,18 @@ const departmentData = [
 ];
 
 export function BudgetChart() {
+  const { formatCurrency, currency } = useCurrency();
+
+  const formatYAxisTick = (value: number) => {
+    if (currency === 'USD') {
+      return `$${(value / 1000).toLocaleString('en-US')}k`;
+    } else {
+      return `${(value / 1000).toLocaleString('en-US')}k ETB`;
+    }
+  };
+
   return (
-    <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
+    <Card className="border-0 shadow-lg bg-card">
       <CardHeader>
         <CardTitle>Budget Performance</CardTitle>
         <CardDescription>Planned vs Actual spending over time</CardDescription>
@@ -29,26 +40,26 @@ export function BudgetChart() {
       <CardContent>
         <ResponsiveContainer width="100%" height={300}>
           <BarChart data={monthlyData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#f0f0f0" />
-            <XAxis dataKey="month" stroke="#6b7280" />
-            <YAxis stroke="#6b7280" tickFormatter={(value) => `R$${(value / 1000).toLocaleString('pt-BR')}k`} />
+            <CartesianGrid strokeDasharray="3 3" className="stroke-border" />
+            <XAxis dataKey="month" className="stroke-muted-foreground" />
+            <YAxis className="stroke-muted-foreground" tickFormatter={formatYAxisTick} />
             <Tooltip
-              formatter={(value: number) => [`R$${value.toLocaleString('pt-BR')}`, ""]}
-              labelStyle={{ color: "#374151" }}
+              formatter={(value: number) => [formatCurrency(value), ""]}
+              labelStyle={{ color: "hsl(var(--foreground))" }}
               contentStyle={{
-                backgroundColor: "white",
-                border: "1px solid #e5e7eb",
+                backgroundColor: "hsl(var(--background))",
+                border: "1px solid hsl(var(--border))",
                 borderRadius: "8px",
                 boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)"
               }}
             />
-            <Bar dataKey="planned" fill="#e5e7eb" name="Planned" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="actual" fill="#3b82f6" name="Actual" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="planned" fill="hsl(var(--muted))" name="Planned" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="actual" fill="hsl(var(--primary))" name="Actual" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
         
-        <div className="mt-6 pt-6 border-t border-gray-200">
-          <h4 className="text-sm font-medium text-gray-700 mb-4">Budget Distribution by Department</h4>
+        <div className="mt-6 pt-6 border-t">
+          <h4 className="text-sm font-medium mb-4">Budget Distribution by Department</h4>
           <div className="flex items-center space-x-8">
             <div className="w-32 h-32">
               <ResponsiveContainer width="100%" height="100%">
@@ -73,9 +84,9 @@ export function BudgetChart() {
                 <div key={index} className="flex items-center justify-between">
                   <div className="flex items-center space-x-2">
                     <div className="w-3 h-3 rounded-full" style={{ backgroundColor: dept.color }}></div>
-                    <span className="text-sm text-gray-600">{dept.name}</span>
+                    <span className="text-sm text-muted-foreground">{dept.name}</span>
                   </div>
-                  <span className="text-sm font-medium text-gray-900">{dept.value}%</span>
+                  <span className="text-sm font-medium">{dept.value}%</span>
                 </div>
               ))}
             </div>

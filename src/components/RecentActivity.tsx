@@ -1,6 +1,7 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Clock, DollarSign, FileText, AlertTriangle } from "lucide-react";
+import { useCurrency } from "@/contexts/CurrencyContext";
 
 const activities = [
   {
@@ -8,7 +9,7 @@ const activities = [
     type: "budget_approval",
     title: "Budget Approved",
     description: "Project Alpha Q2 budget approved by Finance",
-    amount: "R$450.000",
+    amount: 450000,
     time: "2 hours ago",
     icon: DollarSign,
     status: "approved"
@@ -18,7 +19,7 @@ const activities = [
     type: "expense_submitted",
     title: "Expense Report Submitted",
     description: "Marketing campaign expenses for Project Beta",
-    amount: "R$12.500",
+    amount: 12500,
     time: "4 hours ago",
     icon: FileText,
     status: "pending"
@@ -28,7 +29,7 @@ const activities = [
     type: "budget_alert",
     title: "Budget Alert",
     description: "Project Gamma approaching 90% budget utilization",
-    amount: "R$315.000",
+    amount: 315000,
     time: "6 hours ago",
     icon: AlertTriangle,
     status: "warning"
@@ -38,7 +39,7 @@ const activities = [
     type: "budget_allocated",
     title: "Budget Allocated",
     description: "New resources allocated to Project Delta",
-    amount: "R$75.000",
+    amount: 75000,
     time: "1 day ago",
     icon: DollarSign,
     status: "allocated"
@@ -48,7 +49,7 @@ const activities = [
     type: "report_generated",
     title: "Monthly Report Generated",
     description: "May 2024 financial summary report",
-    amount: "",
+    amount: 0,
     time: "2 days ago",
     icon: FileText,
     status: "completed"
@@ -78,8 +79,10 @@ const getIconColor = (status: string) => {
 };
 
 export function RecentActivity() {
+  const { formatCurrency } = useCurrency();
+
   return (
-    <Card className="border-0 shadow-lg bg-white/80 backdrop-blur-sm">
+    <Card className="border-0 shadow-lg bg-card">
       <CardHeader>
         <CardTitle className="flex items-center space-x-2">
           <Clock className="h-5 w-5 text-blue-600" />
@@ -90,23 +93,23 @@ export function RecentActivity() {
       <CardContent>
         <div className="space-y-4">
           {activities.map((activity) => (
-            <div key={activity.id} className="flex items-start space-x-4 p-3 rounded-lg hover:bg-gray-50 transition-colors duration-200">
-              <div className={`p-2 rounded-full bg-gray-100 ${getIconColor(activity.status)}`}>
+            <div key={activity.id} className="flex items-start space-x-4 p-3 rounded-lg hover:bg-muted transition-colors duration-200">
+              <div className={`p-2 rounded-full bg-muted ${getIconColor(activity.status)}`}>
                 <activity.icon className="h-4 w-4" />
               </div>
               <div className="flex-1 space-y-1">
                 <div className="flex items-center justify-between">
-                  <h4 className="text-sm font-medium text-gray-900">{activity.title}</h4>
+                  <h4 className="text-sm font-medium">{activity.title}</h4>
                   <Badge variant="outline" className={getStatusColor(activity.status)}>
                     {activity.status}
                   </Badge>
                 </div>
-                <p className="text-sm text-gray-600">{activity.description}</p>
+                <p className="text-sm text-muted-foreground">{activity.description}</p>
                 <div className="flex items-center justify-between">
-                  {activity.amount && (
-                    <span className="text-sm font-medium text-gray-900">{activity.amount}</span>
+                  {activity.amount > 0 && (
+                    <span className="text-sm font-medium">{formatCurrency(activity.amount)}</span>
                   )}
-                  <span className="text-xs text-gray-500">{activity.time}</span>
+                  <span className="text-xs text-muted-foreground">{activity.time}</span>
                 </div>
               </div>
             </div>
