@@ -5,7 +5,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { User, Mail, Phone, Building, Edit, Save, X } from 'lucide-react';
@@ -46,12 +45,21 @@ const ProfileManagement = () => {
       }
 
       if (data) {
-        setProfile(data);
-        setEditedProfile(data);
+        // Ensure all required fields are present
+        const profileData: Profile = {
+          id: data.id,
+          full_name: data.full_name || '',
+          department: data.department || '',
+          role: data.role || 'user',
+          phone: data.phone || '',
+          avatar_url: data.avatar_url || ''
+        };
+        setProfile(profileData);
+        setEditedProfile(profileData);
       } else {
         // Create profile if it doesn't exist
-        const newProfile = {
-          id: user?.id,
+        const newProfile: Profile = {
+          id: user?.id || '',
           full_name: user?.user_metadata?.full_name || '',
           department: user?.user_metadata?.department || '',
           role: 'user',
