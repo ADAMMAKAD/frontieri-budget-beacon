@@ -1,4 +1,3 @@
-
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -12,6 +11,10 @@ import Reporting from "@/components/Reporting";
 import AuditCompliance from "@/components/AuditCompliance";
 import ProfileManagement from "@/components/ProfileManagement";
 import ExpenseManagement from "@/components/ExpenseManagement";
+import BusinessUnitManagement from "@/components/BusinessUnitManagement";
+import ProjectTeamManagement from "@/components/ProjectTeamManagement";
+import BudgetVersioning from "@/components/BudgetVersioning";
+import ApprovalWorkflows from "@/components/ApprovalWorkflows";
 import { useAuth } from "@/hooks/useAuth";
 import { useState } from "react";
 
@@ -59,6 +62,14 @@ const Index = () => {
         return <ProfileManagement />;
       case "expenses":
         return <ExpenseManagement />;
+      case "business-units":
+        return <BusinessUnitManagement />;
+      case "project-teams":
+        return <ProjectTeamManagement />;
+      case "budget-versions":
+        return <BudgetVersioning />;
+      case "approvals":
+        return <ApprovalWorkflows />;
       default:
         return <OverviewDashboard />;
     }

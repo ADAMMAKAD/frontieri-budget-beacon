@@ -9,9 +9,58 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      approval_workflows: {
+        Row: {
+          approver_id: string | null
+          comments: string | null
+          created_at: string
+          expense_id: string | null
+          id: string
+          project_id: string | null
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          approver_id?: string | null
+          comments?: string | null
+          created_at?: string
+          expense_id?: string | null
+          id?: string
+          project_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          approver_id?: string | null
+          comments?: string | null
+          created_at?: string
+          expense_id?: string | null
+          id?: string
+          project_id?: string | null
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "approval_workflows_expense_id_fkey"
+            columns: ["expense_id"]
+            isOneToOne: false
+            referencedRelation: "expenses"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "approval_workflows_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       budget_categories: {
         Row: {
           allocated_amount: number | null
+          budget_version_id: string | null
           created_at: string | null
           id: string
           name: string
@@ -20,6 +69,7 @@ export type Database = {
         }
         Insert: {
           allocated_amount?: number | null
+          budget_version_id?: string | null
           created_at?: string | null
           id?: string
           name: string
@@ -28,6 +78,7 @@ export type Database = {
         }
         Update: {
           allocated_amount?: number | null
+          budget_version_id?: string | null
           created_at?: string | null
           id?: string
           name?: string
@@ -36,6 +87,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "budget_categories_budget_version_id_fkey"
+            columns: ["budget_version_id"]
+            isOneToOne: false
+            referencedRelation: "budget_versions"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "budget_categories_project_id_fkey"
             columns: ["project_id"]
             isOneToOne: false
@@ -43,6 +101,80 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      budget_versions: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          created_at: string
+          created_by: string | null
+          description: string | null
+          id: string
+          project_id: string | null
+          status: string
+          title: string
+          version_number: number
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          project_id?: string | null
+          status?: string
+          title: string
+          version_number?: number
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          created_at?: string
+          created_by?: string | null
+          description?: string | null
+          id?: string
+          project_id?: string | null
+          status?: string
+          title?: string
+          version_number?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "budget_versions_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      business_units: {
+        Row: {
+          created_at: string
+          description: string | null
+          id: string
+          manager_id: string | null
+          name: string
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          manager_id?: string | null
+          name: string
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          description?: string | null
+          id?: string
+          manager_id?: string | null
+          name?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       expenses: {
         Row: {
@@ -98,6 +230,36 @@ export type Database = {
           },
         ]
       }
+      notifications: {
+        Row: {
+          created_at: string
+          id: string
+          message: string
+          read: boolean
+          title: string
+          type: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          message: string
+          read?: boolean
+          title: string
+          type?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          message?: string
+          read?: boolean
+          title?: string
+          type?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       profiles: {
         Row: {
           created_at: string | null
@@ -125,9 +287,42 @@ export type Database = {
         }
         Relationships: []
       }
+      project_teams: {
+        Row: {
+          created_at: string
+          id: string
+          project_id: string | null
+          role: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          project_id?: string | null
+          role?: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          project_id?: string | null
+          role?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "project_teams_project_id_fkey"
+            columns: ["project_id"]
+            isOneToOne: false
+            referencedRelation: "projects"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       projects: {
         Row: {
           allocated_budget: number | null
+          business_unit_id: string | null
           created_at: string | null
           department: string | null
           description: string | null
@@ -143,6 +338,7 @@ export type Database = {
         }
         Insert: {
           allocated_budget?: number | null
+          business_unit_id?: string | null
           created_at?: string | null
           department?: string | null
           description?: string | null
@@ -158,6 +354,7 @@ export type Database = {
         }
         Update: {
           allocated_budget?: number | null
+          business_unit_id?: string | null
           created_at?: string | null
           department?: string | null
           description?: string | null
@@ -171,7 +368,15 @@ export type Database = {
           total_budget?: number | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "projects_business_unit_id_fkey"
+            columns: ["business_unit_id"]
+            isOneToOne: false
+            referencedRelation: "business_units"
+            referencedColumns: ["id"]
+          },
+        ]
       }
     }
     Views: {

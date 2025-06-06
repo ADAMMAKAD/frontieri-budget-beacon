@@ -1,0 +1,352 @@
+
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { useToast } from '@/hooks/use-toast';
+import { useAuth } from '@/hooks/useAuth';
+import { FileText, Plus, Eye, CheckCircle, XCircle } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+
+interface BudgetVersion {
+  id: string;
+  project_id: string;
+  version_number: number;
+  title: string;
+  description: string | null;
+  status: string;
+  created_by: string | null;
+  approved_by: string | null;
+  created_at: string;
+  approved_at: string | null;
+}
+
+interface Project {
+  id: string;
+  name: string;
+}
+
+const BudgetVersioning = () => {
+  const [versions, setVersions] = useState<BudgetVersion[]>([]);
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [isCreating, setIsCreating] = useState(false);
+  const [formData, setFormData] = useState({
+    project_id: '',
+    title: '',
+    description: ''
+  });
+  const [loading, setLoading] = useState(true);
+  const { toast } = useToast();
+  const { user } = useAuth();
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    try {
+      const [versionsResult, projectsResult] = await Promise.all([
+        supabase.from('budget_versions').select('*').order('created_at', { ascending: false }),
+        supabase.from('projects').select('id, name').order('name')
+      ]);
+
+      if (versionsResult.error) throw versionsResult.error;
+      if (projectsResult.error) throw projectsResult.error;
+
+      setVersions(versionsResult.data || []);
+      setProjects(projectsResult.data || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
+      toast({
+        title: "Error",
+        description: "Failed to load data",
+        variant: "destructive"
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    try {
+      // Get the next version number for this project
+      const { data: existingVersions, error: versionError } = await supabase
+        .from('budget_versions')
+        .select('version_number')
+        .eq('project_id', formData.project_id)
+        .order('version_number', { ascending: false })
+        .limit(1);
+
+      if (versionError) throw versionError;
+
+      const nextVersionNumber = existingVersions && existingVersions.length > 0 
+        ? existingVersions[0].version_number + 1 
+        : 1;
+
+      const { error } = await supabase
+        .from('budget_versions')
+        .insert([{
+          project_id: formData.project_id,
+          version_number: nextVersionNumber,
+          title: formData.title,
+          description: formData.description,
+          status: 'draft',
+          created_by: user?.id
+        }]);
+
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "Budget version created successfully"
+      });
+
+      setFormData({ project_id: '', title: '', description: '' });
+      setIsCreating(false);
+      fetchData();
+    } catch (error) {
+      console.error('Error creating budget version:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create budget version",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleApprove = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('budget_versions')
+        .update({
+          status: 'approved',
+          approved_by: user?.id,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "Budget version approved successfully"
+      });
+      
+      fetchData();
+    } catch (error) {
+      console.error('Error approving budget version:', error);
+      toast({
+        title: "Error",
+        description: "Failed to approve budget version",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const handleReject = async (id: string) => {
+    try {
+      const { error } = await supabase
+        .from('budget_versions')
+        .update({
+          status: 'rejected',
+          approved_by: user?.id,
+          approved_at: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "Budget version rejected"
+      });
+      
+      fetchData();
+    } catch (error) {
+      console.error('Error rejecting budget version:', error);
+      toast({
+        title: "Error",
+        description: "Failed to reject budget version",
+        variant: "destructive"
+      });
+    }
+  };
+
+  const getStatusColor = (status: string) => {
+    switch (status) {
+      case 'approved': return 'bg-green-100 text-green-800';
+      case 'rejected': return 'bg-red-100 text-red-800';
+      case 'draft': return 'bg-yellow-100 text-yellow-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="p-6 space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold text-gray-900">Budget Versioning</h2>
+          <p className="text-gray-600 mt-1">Create and manage budget versions</p>
+        </div>
+        <Button 
+          onClick={() => setIsCreating(true)}
+          className="bg-gradient-to-r from-blue-600 to-purple-600"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Create Version
+        </Button>
+      </div>
+
+      {isCreating && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <FileText className="h-5 w-5" />
+              <span>Create Budget Version</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="project">Project</Label>
+                  <Select
+                    value={formData.project_id}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, project_id: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="title">Version Title</Label>
+                  <Input
+                    id="title"
+                    value={formData.title}
+                    onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                    placeholder="e.g., Q1 2025 Budget"
+                    required
+                  />
+                </div>
+              </div>
+              
+              <div className="space-y-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={formData.description}
+                  onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                  placeholder="Describe the changes in this version..."
+                  rows={3}
+                />
+              </div>
+
+              <div className="flex space-x-2">
+                <Button type="submit">Create Version</Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsCreating(false);
+                    setFormData({ project_id: '', title: '', description: '' });
+                  }}
+                >
+                  Cancel
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <FileText className="h-5 w-5" />
+            <span>Budget Versions</span>
+          </CardTitle>
+          <CardDescription>Manage budget versions and approvals</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Project</TableHead>
+                <TableHead>Version</TableHead>
+                <TableHead>Title</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Created</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {versions.map((version) => (
+                <TableRow key={version.id}>
+                  <TableCell>{version.project_id}</TableCell>
+                  <TableCell>v{version.version_number}</TableCell>
+                  <TableCell className="font-medium">{version.title}</TableCell>
+                  <TableCell>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(version.status)}`}>
+                      {version.status}
+                    </span>
+                  </TableCell>
+                  <TableCell>{new Date(version.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    <div className="flex space-x-2">
+                      <Button variant="outline" size="sm">
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                      {version.status === 'draft' && (
+                        <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleApprove(version.id)}
+                          >
+                            <CheckCircle className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => handleReject(version.id)}
+                          >
+                            <XCircle className="h-4 w-4" />
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default BudgetVersioning;
