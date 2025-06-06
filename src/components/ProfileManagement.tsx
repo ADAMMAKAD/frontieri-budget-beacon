@@ -7,15 +7,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { User, Mail, Phone, Building, Edit, Save, X } from 'lucide-react';
+import { User, Mail, Building, Edit, Save, X } from 'lucide-react';
 
 interface Profile {
   id: string;
   full_name: string;
   department: string;
   role: string;
-  phone: string;
-  avatar_url: string;
 }
 
 const ProfileManagement = () => {
@@ -50,9 +48,7 @@ const ProfileManagement = () => {
           id: data.id,
           full_name: data.full_name || '',
           department: data.department || '',
-          role: data.role || 'user',
-          phone: data.phone || '',
-          avatar_url: data.avatar_url || ''
+          role: data.role || 'user'
         };
         setProfile(profileData);
         setEditedProfile(profileData);
@@ -62,9 +58,7 @@ const ProfileManagement = () => {
           id: user?.id || '',
           full_name: user?.user_metadata?.full_name || '',
           department: user?.user_metadata?.department || '',
-          role: 'user',
-          phone: '',
-          avatar_url: ''
+          role: 'user'
         };
         
         const { error: insertError } = await supabase
@@ -200,20 +194,6 @@ const ProfileManagement = () => {
                   id="department"
                   value={isEditing ? (editedProfile.department || '') : (profile?.department || '')}
                   onChange={(e) => isEditing && setEditedProfile(prev => ({ ...prev, department: e.target.value }))}
-                  disabled={!isEditing}
-                  className={!isEditing ? "bg-gray-50" : ""}
-                />
-              </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="phone">Phone</Label>
-              <div className="flex items-center space-x-2">
-                <Phone className="h-4 w-4 text-gray-400" />
-                <Input
-                  id="phone"
-                  value={isEditing ? (editedProfile.phone || '') : (profile?.phone || '')}
-                  onChange={(e) => isEditing && setEditedProfile(prev => ({ ...prev, phone: e.target.value }))}
                   disabled={!isEditing}
                   className={!isEditing ? "bg-gray-50" : ""}
                 />
