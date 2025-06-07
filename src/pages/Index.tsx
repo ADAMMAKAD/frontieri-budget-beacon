@@ -1,3 +1,4 @@
+
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -15,12 +16,16 @@ import BusinessUnitManagement from "@/components/BusinessUnitManagement";
 import ProjectTeamManagement from "@/components/ProjectTeamManagement";
 import BudgetVersioning from "@/components/BudgetVersioning";
 import ApprovalWorkflows from "@/components/ApprovalWorkflows";
+import NotificationCenter from "@/components/NotificationCenter";
+import AdminDashboard from "@/components/AdminDashboard";
 import { useAuth } from "@/hooks/useAuth";
+import { useRole } from "@/hooks/useRole";
 import { useState } from "react";
 
 const Index = () => {
   const [activeSection, setActiveSection] = useState("overview");
   const { user, loading } = useAuth();
+  const { isAdmin, loading: roleLoading } = useRole();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -29,7 +34,7 @@ const Index = () => {
     }
   }, [user, loading, navigate]);
 
-  if (loading) {
+  if (loading || roleLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
@@ -70,6 +75,10 @@ const Index = () => {
         return <BudgetVersioning />;
       case "approvals":
         return <ApprovalWorkflows />;
+      case "notifications":
+        return <NotificationCenter />;
+      case "admin":
+        return isAdmin ? <AdminDashboard /> : <OverviewDashboard />;
       default:
         return <OverviewDashboard />;
     }
@@ -79,7 +88,11 @@ const Index = () => {
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
       <SidebarProvider>
         <div className="flex min-h-screen w-full">
-          <AppSidebar activeSection={activeSection} setActiveSection={setActiveSection} />
+          <AppSidebar 
+            activeSection={activeSection} 
+            setActiveSection={setActiveSection}
+            isAdmin={isAdmin}
+          />
           <div className="flex-1 flex flex-col">
             <DashboardHeader />
             <main className="flex-1 overflow-auto">
