@@ -20,10 +20,10 @@ interface Expense {
   project_id: string;
   projects?: {
     name: string;
-  };
+  } | null;
   profiles?: {
     full_name: string;
-  };
+  } | null;
 }
 
 export const AdminExpenses = () => {
@@ -48,7 +48,14 @@ export const AdminExpenses = () => {
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setExpenses(data || []);
+      
+      const formattedExpenses = data?.map(expense => ({
+        ...expense,
+        projects: expense.projects || null,
+        profiles: expense.profiles || null
+      })) || [];
+      
+      setExpenses(formattedExpenses);
     } catch (error) {
       console.error('Error fetching expenses:', error);
       toast({

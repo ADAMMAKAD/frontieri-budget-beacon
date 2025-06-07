@@ -16,11 +16,13 @@ import { useAuth } from '@/hooks/useAuth';
 interface User {
   id: string;
   email: string;
-  full_name: string;
-  department: string;
+  full_name: string | null;
+  department: string | null;
   role: string;
   created_at: string;
 }
+
+type AppRole = 'admin' | 'project_manager' | 'finance_manager' | 'user';
 
 export const UserManagement = () => {
   const [users, setUsers] = useState<User[]>([]);
@@ -32,7 +34,7 @@ export const UserManagement = () => {
     password: '',
     full_name: '',
     department: '',
-    role: 'user'
+    role: 'user' as AppRole
   });
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
@@ -43,11 +45,10 @@ export const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select('*');
-
-      if (profilesError) throw profilesError;
+      // First get all users from auth.users via profiles table
+      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
+      
+      if (authError) throw authError;
 
       const { data: userRoles, error: rolesError } = await supabase
         .from('user_roles')
@@ -55,13 +56,25 @@ export const UserManagement = () => {
 
       if (rolesError) throw rolesError;
 
-      const usersWithRoles = profiles?.map(profile => {
-        const userRole = userRoles?.find(role => role.user_id === profile.id);
+      const { data: profiles, error: profilesError } = await supabase
+        .from('profiles')
+        .select('*');
+
+      if (profilesError) throw profilesError;
+
+      const usersWithRoles = authUsers.users.map(authUser => {
+        const userRole = userRoles?.find(role => role.user_id === authUser.id);
+        const profile = profiles?.find(p => p.id === authUser.id);
+        
         return {
-          ...profile,
-          role: userRole?.role || 'user'
+          id: authUser.id,
+          email: authUser.email || '',
+          full_name: profile?.full_name || null,
+          department: profile?.department || null,
+          role: userRole?.role || 'user',
+          created_at: authUser.created_at
         };
-      }) || [];
+      });
 
       setUsers(usersWithRoles);
     } catch (error) {
@@ -78,14 +91,12 @@ export const UserManagement = () => {
 
   const createUser = async () => {
     try {
-      const { error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.admin.createUser({
         email: newUserData.email,
         password: newUserData.password,
-        options: {
-          data: {
-            full_name: newUserData.full_name,
-            department: newUserData.department
-          }
+        user_metadata: {
+          full_name: newUserData.full_name,
+          department: newUserData.department
         }
       });
 
@@ -109,7 +120,7 @@ export const UserManagement = () => {
     }
   };
 
-  const updateUserRole = async (userId: string, newRole: string) => {
+  const updateUserRole = async (userId: string, newRole: AppRole) => {
     try {
       const { error } = await supabase
         .from('user_roles')
@@ -243,7 +254,7 @@ export const UserManagement = () => {
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="role">Role</Label>
-                <Select value={newUserData.role} onValueChange={(value) => setNewUserData({ ...newUserData, role: value })}>
+                <Select value={newUserData.role} onValueChange={(value: AppRole) => setNewUserData({ ...newUserData, role: value })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -301,7 +312,7 @@ export const UserManagement = () => {
                     <div className="flex space-x-2">
                       <Select
                         value={user.role}
-                        onValueChange={(value) => updateUserRole(user.id, value)}
+                        onValueChange={(value: AppRole) => updateUserRole(user.id, value)}
                       >
                         <SelectTrigger className="w-32">
                           <SelectValue />
