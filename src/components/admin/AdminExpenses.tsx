@@ -38,22 +38,33 @@ export const AdminExpenses = () => {
 
   const fetchExpenses = async () => {
     try {
-      const { data, error } = await supabase
+      // First get expenses with projects
+      const { data: expensesData, error: expensesError } = await supabase
         .from('expenses')
         .select(`
           *,
-          projects (name),
-          profiles!expenses_submitted_by_fkey (full_name)
+          projects (name)
         `)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
-      
-      const formattedExpenses = data?.map(expense => ({
-        ...expense,
-        projects: expense.projects || null,
-        profiles: expense.profiles || null
-      })) || [];
+      if (expensesError) throw expensesError;
+
+      // Then get profiles data separately
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name');
+
+      if (profilesError) throw profilesError;
+
+      // Combine the data
+      const formattedExpenses = expensesData?.map(expense => {
+        const profile = profilesData?.find(p => p.id === expense.submitted_by);
+        return {
+          ...expense,
+          projects: expense.projects || null,
+          profiles: profile ? { full_name: profile.full_name || 'Unknown' } : null
+        };
+      }) || [];
       
       setExpenses(formattedExpenses);
     } catch (error) {
