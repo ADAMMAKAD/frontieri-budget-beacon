@@ -34,6 +34,13 @@ const Index = () => {
     }
   }, [user, loading, navigate]);
 
+  // Redirect non-admin users away from admin section
+  useEffect(() => {
+    if (!roleLoading && activeSection === "admin" && !isAdmin) {
+      setActiveSection("overview");
+    }
+  }, [activeSection, isAdmin, roleLoading]);
+
   if (loading || roleLoading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
@@ -78,6 +85,7 @@ const Index = () => {
       case "notifications":
         return <NotificationCenter />;
       case "admin":
+        // Only render admin dashboard if user is admin
         return isAdmin ? <AdminDashboard /> : <OverviewDashboard />;
       default:
         return <OverviewDashboard />;
