@@ -18,6 +18,7 @@ import BudgetVersioning from "@/components/BudgetVersioning";
 import ApprovalWorkflows from "@/components/ApprovalWorkflows";
 import NotificationCenter from "@/components/NotificationCenter";
 import AdminDashboard from "@/components/AdminDashboard";
+import ProjectMilestones from "@/components/ProjectMilestones";
 import { useAuth } from "@/hooks/useAuth";
 import { useRole } from "@/hooks/useRole";
 import { useState } from "react";
@@ -66,6 +67,8 @@ const Index = () => {
         return <BudgetAllocation />;
       case "tracking":
         return <BudgetTracking />;
+      case "milestones":
+        return <ProjectMilestones />;
       case "reporting":
         return <Reporting />;
       case "audit":
