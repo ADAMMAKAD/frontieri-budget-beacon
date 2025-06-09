@@ -1,5 +1,5 @@
 
-import { LayoutDashboard, PieChart, DollarSign, TrendingUp, FileText, Shield, Settings, Bell, Users, Building2, UserCog, GitBranch, CheckSquare, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, PieChart, DollarSign, TrendingUp, FileText, Shield, Settings, Bell, Users, Building2, UserCog, GitBranch, CheckSquare, ShieldCheck, Target } from "lucide-react";
 import {
   Sidebar,
   SidebarContent,
@@ -19,6 +19,7 @@ const menuItems = [
   { id: "planning", title: "Budget Planning", icon: PieChart },
   { id: "allocation", title: "Budget Allocation", icon: DollarSign },
   { id: "tracking", title: "Budget Tracking", icon: TrendingUp },
+  { id: "milestones", title: "Project Milestones", icon: Target },
   { id: "reporting", title: "Reporting", icon: FileText },
   { id: "audit", title: "Audit Compliance", icon: Shield },
 ];

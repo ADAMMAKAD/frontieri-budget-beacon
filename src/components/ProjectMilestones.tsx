@@ -78,7 +78,7 @@ const ProjectMilestones = () => {
 
   const fetchMilestones = async (projectId: string) => {
     const { data, error } = await supabase
-      .from('project_milestones')
+      .from('project_milestones' as any)
       .select('*')
       .eq('project_id', projectId)
       .order('due_date');
@@ -91,12 +91,12 @@ const ProjectMilestones = () => {
       });
     } else {
       // Update overdue status
-      const updatedMilestones = (data || []).map(milestone => {
+      const updatedMilestones = (data || []).map((milestone: any) => {
         const isOverdue = new Date(milestone.due_date) < new Date() && milestone.status !== 'completed';
         return {
           ...milestone,
           status: isOverdue && milestone.status !== 'completed' ? 'overdue' : milestone.status
-        };
+        } as Milestone;
       });
       setMilestones(updatedMilestones);
     }
@@ -115,7 +115,7 @@ const ProjectMilestones = () => {
     }
 
     const { error } = await supabase
-      .from('project_milestones')
+      .from('project_milestones' as any)
       .insert([{
         project_id: selectedProject,
         title: newMilestone.title,
@@ -151,7 +151,7 @@ const ProjectMilestones = () => {
 
   const updateMilestone = async (milestoneId: string, updates: Partial<Milestone>) => {
     const { error } = await supabase
-      .from('project_milestones')
+      .from('project_milestones' as any)
       .update(updates)
       .eq('id', milestoneId);
 
