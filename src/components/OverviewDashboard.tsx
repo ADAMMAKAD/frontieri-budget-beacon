@@ -1,3 +1,4 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
@@ -5,9 +6,46 @@ import { TrendingUp, TrendingDown, DollarSign, AlertTriangle, CheckCircle } from
 import { BudgetChart } from "@/components/BudgetChart";
 import { RecentActivity } from "@/components/RecentActivity";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
+
+interface Project {
+  id: string;
+  name: string;
+  total_budget: number;
+  spent_budget: number;
+  status: string;
+}
 
 export function OverviewDashboard() {
   const { formatCurrency } = useCurrency();
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchProjects();
+  }, []);
+
+  const fetchProjects = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('projects')
+        .select('id, name, total_budget, spent_budget, status')
+        .limit(4);
+
+      if (error) {
+        console.error('Error fetching projects:', error);
+        setProjects([]);
+      } else {
+        setProjects(data || []);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setProjects([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const budgetMetrics = [
     {
@@ -40,13 +78,6 @@ export function OverviewDashboard() {
     }
   ];
 
-  const projects = [
-    { name: "Project Alpha", budget: 450000, spent: 325000, status: "on-track" },
-    { name: "Project Beta", budget: 680000, spent: 612000, status: "over-budget" },
-    { name: "Project Gamma", budget: 320000, spent: 198000, status: "under-budget" },
-    { name: "Project Delta", budget: 440000, spent: 385000, status: "on-track" },
-  ];
-
   return (
     <div className="p-6 space-y-6">
       {/* Welcome Section */}
@@ -55,6 +86,12 @@ export function OverviewDashboard() {
         <p className="text-blue-100 text-lg">
           Project Budget Management System - Your centralized financial control center
         </p>
+        <div className="mt-4 p-3 bg-white/10 rounded-lg">
+          <p className="text-sm text-blue-100 mb-2">🔐 <strong>Admin Access:</strong></p>
+          <p className="text-xs text-blue-200">
+            Create an account with email: <code className="bg-white/20 px-1 rounded">admin@gmail.com</code> and password: <code className="bg-white/20 px-1 rounded">1234567890</code> to access the Admin Dashboard
+          </p>
+        </div>
       </div>
 
       {/* Key Metrics */}
@@ -102,49 +139,65 @@ export function OverviewDashboard() {
           <CardDescription>Current budget allocation and spending across active projects</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {projects.map((project, index) => {
-              const utilization = (project.spent / project.budget) * 100;
-              const getStatusColor = (status: string) => {
-                switch (status) {
-                  case "on-track": return "text-green-600";
-                  case "over-budget": return "text-red-600";
-                  case "under-budget": return "text-blue-600";
-                  default: return "text-gray-600";
-                }
-              };
-              const getStatusIcon = (status: string) => {
-                switch (status) {
-                  case "on-track": return <CheckCircle className="h-4 w-4 text-green-600" />;
-                  case "over-budget": return <AlertTriangle className="h-4 w-4 text-red-600" />;
-                  case "under-budget": return <TrendingDown className="h-4 w-4 text-blue-600" />;
-                  default: return null;
-                }
-              };
+          {loading ? (
+            <div className="flex items-center justify-center p-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+            </div>
+          ) : projects.length === 0 ? (
+            <div className="text-center p-8 text-muted-foreground">
+              <p>No projects found. Create some projects to see budget status here.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {projects.map((project, index) => {
+                const budget = project.total_budget || 0;
+                const spent = project.spent_budget || 0;
+                const utilization = budget > 0 ? (spent / budget) * 100 : 0;
+                
+                const getStatusColor = (status: string) => {
+                  switch (status) {
+                    case "active": return "text-green-600";
+                    case "completed": return "text-blue-600";
+                    case "on-hold": return "text-yellow-600";
+                    case "cancelled": return "text-red-600";
+                    default: return "text-gray-600";
+                  }
+                };
+                
+                const getStatusIcon = (status: string) => {
+                  switch (status) {
+                    case "active": return <CheckCircle className="h-4 w-4 text-green-600" />;
+                    case "completed": return <CheckCircle className="h-4 w-4 text-blue-600" />;
+                    case "on-hold": return <AlertTriangle className="h-4 w-4 text-yellow-600" />;
+                    case "cancelled": return <AlertTriangle className="h-4 w-4 text-red-600" />;
+                    default: return null;
+                  }
+                };
 
-              return (
-                <div key={index} className="p-4 rounded-lg bg-muted hover:bg-muted/80 transition-colors duration-200">
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center space-x-2">
-                      <h4 className="font-medium">{project.name}</h4>
-                      {getStatusIcon(project.status)}
+                return (
+                  <div key={index} className="p-4 rounded-lg bg-muted hover:bg-muted/80 transition-colors duration-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <h4 className="font-medium">{project.name}</h4>
+                        {getStatusIcon(project.status)}
+                      </div>
+                      <Badge variant="outline" className={getStatusColor(project.status)}>
+                        {project.status.replace("-", " ").toUpperCase()}
+                      </Badge>
                     </div>
-                    <Badge variant="outline" className={getStatusColor(project.status)}>
-                      {project.status.replace("-", " ").toUpperCase()}
-                    </Badge>
-                  </div>
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm text-muted-foreground">
-                      <span>Budget: {formatCurrency(project.budget)}</span>
-                      <span>Spent: {formatCurrency(project.spent)}</span>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Budget: {formatCurrency(budget)}</span>
+                        <span>Spent: {formatCurrency(spent)}</span>
+                      </div>
+                      <Progress value={utilization} className="h-2" />
+                      <p className="text-xs text-muted-foreground">{utilization.toFixed(1)}% utilized</p>
                     </div>
-                    <Progress value={utilization} className="h-2" />
-                    <p className="text-xs text-muted-foreground">{utilization.toFixed(1)}% utilized</p>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

@@ -2,6 +2,8 @@
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useCurrency } from "@/contexts/CurrencyContext";
+import { useState, useEffect } from "react";
+import { supabase } from "@/integrations/supabase/client";
 
 const monthlyData = [
   { month: "Jan", planned: 400000, actual: 380000 },
@@ -12,16 +14,41 @@ const monthlyData = [
   { month: "Jun", planned: 380000, actual: 365000 },
 ];
 
-const departmentData = [
-  { name: "Engineering", value: 35, color: "#3B82F6" },
-  { name: "Marketing", value: 25, color: "#8B5CF6" },
-  { name: "Operations", value: 20, color: "#10B981" },
-  { name: "Research", value: 15, color: "#F59E0B" },
-  { name: "Other", value: 5, color: "#6B7280" },
-];
+interface BusinessUnit {
+  id: string;
+  name: string;
+  description: string;
+}
 
 export function BudgetChart() {
   const { formatCurrency, currency } = useCurrency();
+  const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchBusinessUnits();
+  }, []);
+
+  const fetchBusinessUnits = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('business_units')
+        .select('*')
+        .limit(5);
+
+      if (error) {
+        console.error('Error fetching business units:', error);
+        setBusinessUnits([]);
+      } else {
+        setBusinessUnits(data || []);
+      }
+    } catch (error) {
+      console.error('Error:', error);
+      setBusinessUnits([]);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const formatYAxisTick = (value: number) => {
     if (currency === 'USD') {
@@ -30,6 +57,20 @@ export function BudgetChart() {
       return `${(value / 1000).toLocaleString('en-US')}k ETB`;
     }
   };
+
+  // Generate colors for business units
+  const colors = ['#DC2626', '#991B1B', '#B91C1C', '#EF4444', '#F87171'];
+  
+  const businessUnitData = businessUnits.map((unit, index) => ({
+    name: unit.name,
+    value: Math.floor(Math.random() * 30) + 10, // Random percentage for demo
+    color: colors[index % colors.length]
+  }));
+
+  // If no business units, show fallback data
+  const displayData = businessUnitData.length > 0 ? businessUnitData : [
+    { name: "No Business Units", value: 100, color: "#DC2626" }
+  ];
 
   return (
     <Card className="border-0 shadow-lg bg-card">
@@ -54,43 +95,49 @@ export function BudgetChart() {
               }}
             />
             <Bar dataKey="planned" fill="hsl(var(--muted))" name="Planned" radius={[4, 4, 0, 0]} />
-            <Bar dataKey="actual" fill="hsl(var(--primary))" name="Actual" radius={[4, 4, 0, 0]} />
+            <Bar dataKey="actual" fill="#DC2626" name="Actual" radius={[4, 4, 0, 0]} />
           </BarChart>
         </ResponsiveContainer>
         
         <div className="mt-6 pt-6 border-t">
-          <h4 className="text-sm font-medium mb-4">Budget Distribution by Department</h4>
-          <div className="flex items-center space-x-8">
-            <div className="w-32 h-32">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={departmentData}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={20}
-                    outerRadius={60}
-                    dataKey="value"
-                  >
-                    {departmentData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={entry.color} />
-                    ))}
-                  </Pie>
-                </PieChart>
-              </ResponsiveContainer>
+          <h4 className="text-sm font-medium mb-4">Budget Distribution by Business Units</h4>
+          {loading ? (
+            <div className="flex items-center justify-center p-4">
+              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-red-600"></div>
             </div>
-            <div className="flex-1 space-y-2">
-              {departmentData.map((dept, index) => (
-                <div key={index} className="flex items-center justify-between">
-                  <div className="flex items-center space-x-2">
-                    <div className="w-3 h-3 rounded-full" style={{ backgroundColor: dept.color }}></div>
-                    <span className="text-sm text-muted-foreground">{dept.name}</span>
+          ) : (
+            <div className="flex items-center space-x-8">
+              <div className="w-32 h-32">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={displayData}
+                      cx="50%"
+                      cy="50%"
+                      innerRadius={20}
+                      outerRadius={60}
+                      dataKey="value"
+                    >
+                      {displayData.map((entry, index) => (
+                        <Cell key={`cell-${index}`} fill={entry.color} />
+                      ))}
+                    </Pie>
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <div className="flex-1 space-y-2">
+                {displayData.map((unit, index) => (
+                  <div key={index} className="flex items-center justify-between">
+                    <div className="flex items-center space-x-2">
+                      <div className="w-3 h-3 rounded-full" style={{ backgroundColor: unit.color }}></div>
+                      <span className="text-sm text-muted-foreground">{unit.name}</span>
+                    </div>
+                    <span className="text-sm font-medium">{unit.value}%</span>
                   </div>
-                  <span className="text-sm font-medium">{dept.value}%</span>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
+          )}
         </div>
       </CardContent>
     </Card>
