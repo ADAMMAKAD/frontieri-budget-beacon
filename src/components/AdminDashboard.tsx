@@ -1,5 +1,6 @@
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Shield, Users, Building2, DollarSign, FileText, Activity } from 'lucide-react';
@@ -10,8 +11,55 @@ import { AdminExpenses } from './admin/AdminExpenses';
 import { AdminBusinessUnits } from './admin/AdminBusinessUnits';
 import { AdminActivityLog } from './admin/AdminActivityLog';
 
+interface DashboardStats {
+  totalUsers: number;
+  activeProjects: number;
+  totalBudget: number;
+  pendingApprovals: number;
+}
+
 const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState('users');
+  const [stats, setStats] = useState<DashboardStats>({
+    totalUsers: 0,
+    activeProjects: 0,
+    totalBudget: 0,
+    pendingApprovals: 0
+  });
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardStats();
+  }, []);
+
+  const fetchDashboardStats = async () => {
+    try {
+      const [usersResult, projectsResult, expensesResult] = await Promise.all([
+        supabase.from('profiles').select('id', { count: 'exact', head: true }),
+        supabase.from('projects').select('id, status, total_budget'),
+        supabase.from('expenses').select('id, status', { count: 'exact' })
+      ]);
+
+      const totalUsers = usersResult.count || 0;
+      
+      const projects = projectsResult.data || [];
+      const activeProjects = projects.filter(p => p.status === 'active').length;
+      const totalBudget = projects.reduce((sum, p) => sum + (p.total_budget || 0), 0);
+      
+      const pendingApprovals = expensesResult.data?.filter(e => e.status === 'pending').length || 0;
+
+      setStats({
+        totalUsers,
+        activeProjects,
+        totalBudget,
+        pendingApprovals
+      });
+    } catch (error) {
+      console.error('Error fetching dashboard stats:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <div className="p-6 space-y-6">
@@ -30,7 +78,9 @@ const AdminDashboard = () => {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">--</div>
+            <div className="text-2xl font-bold">
+              {loading ? '--' : stats.totalUsers}
+            </div>
             <p className="text-xs text-muted-foreground">System users</p>
           </CardContent>
         </Card>
@@ -41,7 +91,9 @@ const AdminDashboard = () => {
             <Building2 className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">--</div>
+            <div className="text-2xl font-bold">
+              {loading ? '--' : stats.activeProjects}
+            </div>
             <p className="text-xs text-muted-foreground">In progress</p>
           </CardContent>
         </Card>
@@ -52,7 +104,9 @@ const AdminDashboard = () => {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">--</div>
+            <div className="text-2xl font-bold">
+              {loading ? '--' : `$${stats.totalBudget.toLocaleString()}`}
+            </div>
             <p className="text-xs text-muted-foreground">Across all projects</p>
           </CardContent>
         </Card>
@@ -63,7 +117,9 @@ const AdminDashboard = () => {
             <FileText className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
-            <div className="text-2xl font-bold">--</div>
+            <div className="text-2xl font-bold">
+              {loading ? '--' : stats.pendingApprovals}
+            </div>
             <p className="text-xs text-muted-foreground">Require attention</p>
           </CardContent>
         </Card>

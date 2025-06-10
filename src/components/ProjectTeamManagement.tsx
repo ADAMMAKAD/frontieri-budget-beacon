@@ -19,7 +19,7 @@ interface ProjectTeam {
   role: string;
   created_at: string;
   projects?: { name: string };
-  profiles?: { full_name: string };
+  profiles?: { full_name: string | null };
 }
 
 interface Project {
@@ -30,10 +30,11 @@ interface Project {
 const ProjectTeamManagement = () => {
   const [teams, setTeams] = useState<ProjectTeam[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<{id: string, full_name: string | null}[]>([]);
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState({
     project_id: '',
-    user_email: '',
+    user_id: '',
     role: 'member'
   });
   const [loading, setLoading] = useState(true);
@@ -47,23 +48,28 @@ const ProjectTeamManagement = () => {
 
   const fetchData = async () => {
     try {
-      const [teamsResult, projectsResult] = await Promise.all([
+      const [teamsResult, projectsResult, usersResult] = await Promise.all([
         supabase
           .from('project_teams')
           .select(`
             *,
-            projects(name),
-            profiles(full_name)
+            projects!inner(name),
+            profiles!inner(full_name)
           `)
           .order('created_at', { ascending: false }),
         supabase
           .from('projects')
           .select('id, name, team_id, project_manager_id')
-          .order('name')
+          .order('name'),
+        supabase
+          .from('profiles')
+          .select('id, full_name')
+          .order('full_name')
       ]);
 
       if (teamsResult.error) throw teamsResult.error;
       if (projectsResult.error) throw projectsResult.error;
+      if (usersResult.error) throw usersResult.error;
 
       // Filter projects based on user access
       const accessibleProjects = (projectsResult.data || []).filter(project => 
@@ -72,6 +78,7 @@ const ProjectTeamManagement = () => {
 
       setTeams(teamsResult.data || []);
       setProjects(accessibleProjects);
+      setAvailableUsers(usersResult.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -88,17 +95,11 @@ const ProjectTeamManagement = () => {
     e.preventDefault();
     
     try {
-      // Look up user by email in auth.users via RPC call or use profiles table
-      // Since we can't query auth.users directly, we'll try to find by email in profiles
-      // This assumes the full_name field might contain the email or we need a different approach
-      
-      // For now, let's assume the user_email input is actually a user ID
-      // In a real implementation, you'd want to have a proper user lookup system
       const { error } = await supabase
         .from('project_teams')
         .insert([{
           project_id: formData.project_id,
-          user_id: formData.user_email, // This should be a proper user ID lookup
+          user_id: formData.user_id,
           role: formData.role
         }]);
 
@@ -109,14 +110,14 @@ const ProjectTeamManagement = () => {
         description: "Team member added successfully"
       });
 
-      setFormData({ project_id: '', user_email: '', role: 'member' });
+      setFormData({ project_id: '', user_id: '', role: 'member' });
       setIsAdding(false);
       fetchData();
     } catch (error) {
       console.error('Error adding team member:', error);
       toast({
         title: "Error",
-        description: "Failed to add team member. Please ensure the user ID is valid.",
+        description: "Failed to add team member",
         variant: "destructive"
       });
     }
@@ -217,17 +218,22 @@ const ProjectTeamManagement = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="user_email">User ID</Label>
-                  <Input
-                    id="user_email"
-                    value={formData.user_email}
-                    onChange={(e) => setFormData(prev => ({ ...prev, user_email: e.target.value }))}
-                    placeholder="Enter user ID"
-                    required
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    Enter the UUID of the user you want to add
-                  </p>
+                  <Label htmlFor="user_id">User</Label>
+                  <Select
+                    value={formData.user_id}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, user_id: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select user" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableUsers.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.full_name || 'Unnamed User'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
 
                 <div className="space-y-2">
@@ -256,7 +262,7 @@ const ProjectTeamManagement = () => {
                   variant="outline" 
                   onClick={() => {
                     setIsAdding(false);
-                    setFormData({ project_id: '', user_email: '', role: 'member' });
+                    setFormData({ project_id: '', user_id: '', role: 'member' });
                   }}
                 >
                   Cancel
@@ -290,7 +296,7 @@ const ProjectTeamManagement = () => {
               {teams.map((team) => (
                 <TableRow key={team.id}>
                   <TableCell>{team.projects?.name || team.project_id}</TableCell>
-                  <TableCell>{team.profiles?.full_name || team.user_id}</TableCell>
+                  <TableCell>{team.profiles?.full_name || 'Unnamed User'}</TableCell>
                   <TableCell>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       team.role === 'admin' ? 'bg-red-100 text-red-800' :

@@ -15,20 +15,18 @@ import { useAuth } from '@/hooks/useAuth';
 
 interface User {
   id: string;
-  email: string;
   full_name: string | null;
   department: string | null;
   role: string;
   created_at: string;
 }
 
-type AppRole = 'admin' | 'project_manager' | 'finance_manager' | 'user';
+type AppRole = 'admin' | 'project_admin' | 'project_manager' | 'finance_manager' | 'user';
 
 export const UserManagement = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [editingUser, setEditingUser] = useState<User | null>(null);
   const [newUserData, setNewUserData] = useState({
     email: '',
     password: '',
@@ -45,36 +43,26 @@ export const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      // First get all users from auth.users via profiles table
-      const { data: authUsers, error: authError } = await supabase.auth.admin.listUsers();
-      
-      if (authError) throw authError;
-
-      const { data: userRoles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id, role');
-
-      if (rolesError) throw rolesError;
-
+      // Get users from profiles table with their roles
       const { data: profiles, error: profilesError } = await supabase
         .from('profiles')
-        .select('*');
+        .select(`
+          id,
+          full_name,
+          department,
+          created_at,
+          user_roles(role)
+        `);
 
       if (profilesError) throw profilesError;
 
-      const usersWithRoles = authUsers.users.map(authUser => {
-        const userRole = userRoles?.find(role => role.user_id === authUser.id);
-        const profile = profiles?.find(p => p.id === authUser.id);
-        
-        return {
-          id: authUser.id,
-          email: authUser.email || '',
-          full_name: profile?.full_name || null,
-          department: profile?.department || null,
-          role: userRole?.role || 'user',
-          created_at: authUser.created_at
-        };
-      });
+      const usersWithRoles = (profiles || []).map(profile => ({
+        id: profile.id,
+        full_name: profile.full_name,
+        department: profile.department,
+        role: profile.user_roles?.[0]?.role || 'user',
+        created_at: profile.created_at
+      }));
 
       setUsers(usersWithRoles);
     } catch (error) {
@@ -91,20 +79,38 @@ export const UserManagement = () => {
 
   const createUser = async () => {
     try {
-      const { error } = await supabase.auth.admin.createUser({
+      // Use regular signup instead of admin API
+      const { data, error } = await supabase.auth.signUp({
         email: newUserData.email,
         password: newUserData.password,
-        user_metadata: {
-          full_name: newUserData.full_name,
-          department: newUserData.department
+        options: {
+          data: {
+            full_name: newUserData.full_name,
+            department: newUserData.department
+          }
         }
       });
 
       if (error) throw error;
 
+      // Set the user role if user was created
+      if (data.user && newUserData.role !== 'user') {
+        const { error: roleError } = await supabase
+          .from('user_roles')
+          .insert({
+            user_id: data.user.id,
+            role: newUserData.role,
+            assigned_by: currentUser?.id
+          });
+
+        if (roleError) {
+          console.error('Error setting user role:', roleError);
+        }
+      }
+
       toast({
         title: "Success",
-        description: "User created successfully"
+        description: "User created successfully. They will need to verify their email."
       });
 
       setDialogOpen(false);
@@ -148,40 +154,10 @@ export const UserManagement = () => {
     }
   };
 
-  const deleteUser = async (userId: string) => {
-    if (userId === currentUser?.id) {
-      toast({
-        title: "Error",
-        description: "You cannot delete your own account",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    try {
-      const { error } = await supabase.auth.admin.deleteUser(userId);
-
-      if (error) throw error;
-
-      toast({
-        title: "Success",
-        description: "User deleted successfully"
-      });
-
-      fetchUsers();
-    } catch (error: any) {
-      console.error('Error deleting user:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to delete user",
-        variant: "destructive"
-      });
-    }
-  };
-
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'admin': return 'bg-red-100 text-red-800';
+      case 'project_admin': return 'bg-purple-100 text-purple-800';
       case 'project_manager': return 'bg-blue-100 text-blue-800';
       case 'finance_manager': return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
@@ -262,6 +238,7 @@ export const UserManagement = () => {
                     <SelectItem value="user">User</SelectItem>
                     <SelectItem value="project_manager">Project Manager</SelectItem>
                     <SelectItem value="finance_manager">Finance Manager</SelectItem>
+                    <SelectItem value="project_admin">Project Admin</SelectItem>
                     <SelectItem value="admin">Admin</SelectItem>
                   </SelectContent>
                 </Select>
@@ -289,7 +266,6 @@ export const UserManagement = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
                 <TableHead>Department</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Created</TableHead>
@@ -300,7 +276,6 @@ export const UserManagement = () => {
               {users.map((user) => (
                 <TableRow key={user.id}>
                   <TableCell className="font-medium">{user.full_name || 'N/A'}</TableCell>
-                  <TableCell>{user.email}</TableCell>
                   <TableCell>{user.department || 'N/A'}</TableCell>
                   <TableCell>
                     <Badge className={getRoleBadgeColor(user.role)}>
@@ -309,31 +284,21 @@ export const UserManagement = () => {
                   </TableCell>
                   <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
                   <TableCell>
-                    <div className="flex space-x-2">
-                      <Select
-                        value={user.role}
-                        onValueChange={(value: AppRole) => updateUserRole(user.id, value)}
-                      >
-                        <SelectTrigger className="w-32">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="user">User</SelectItem>
-                          <SelectItem value="project_manager">Project Manager</SelectItem>
-                          <SelectItem value="finance_manager">Finance Manager</SelectItem>
-                          <SelectItem value="admin">Admin</SelectItem>
-                        </SelectContent>
-                      </Select>
-                      {user.id !== currentUser?.id && (
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => deleteUser(user.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      )}
-                    </div>
+                    <Select
+                      value={user.role}
+                      onValueChange={(value: AppRole) => updateUserRole(user.id, value)}
+                    >
+                      <SelectTrigger className="w-40">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="user">User</SelectItem>
+                        <SelectItem value="project_manager">Project Manager</SelectItem>
+                        <SelectItem value="finance_manager">Finance Manager</SelectItem>
+                        <SelectItem value="project_admin">Project Admin</SelectItem>
+                        <SelectItem value="admin">Admin</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </TableCell>
                 </TableRow>
               ))}
