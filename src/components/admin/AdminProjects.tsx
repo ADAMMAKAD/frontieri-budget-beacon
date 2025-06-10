@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
+import { useRole } from '@/hooks/useRole';
 import { Plus, Edit, Trash2, Building } from 'lucide-react';
 
 interface Project {
@@ -24,11 +25,19 @@ interface Project {
   start_date: string;
   end_date: string;
   department: string;
+  team_id: string;
+  project_manager_id: string;
   created_at: string;
+}
+
+interface BusinessUnit {
+  id: string;
+  name: string;
 }
 
 export const AdminProjects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -39,23 +48,42 @@ export const AdminProjects = () => {
     total_budget: 0,
     department: '',
     start_date: '',
-    end_date: ''
+    end_date: '',
+    team_id: ''
   });
   const { toast } = useToast();
+  const { isAdmin, isProjectAdmin, canAccessProject } = useRole();
 
   useEffect(() => {
-    fetchProjects();
+    fetchData();
   }, []);
 
-  const fetchProjects = async () => {
+  const fetchData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const [projectsResult, businessUnitsResult] = await Promise.all([
+        supabase
+          .from('projects')
+          .select('*')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('business_units')
+          .select('id, name')
+          .order('name')
+      ]);
 
-      if (error) throw error;
-      setProjects(data || []);
+      if (projectsResult.error) throw projectsResult.error;
+      if (businessUnitsResult.error) throw businessUnitsResult.error;
+
+      // Filter projects based on user access if not admin
+      let filteredProjects = projectsResult.data || [];
+      if (!isAdmin) {
+        filteredProjects = filteredProjects.filter(project => 
+          canAccessProject(project.team_id, project.project_manager_id)
+        );
+      }
+
+      setProjects(filteredProjects);
+      setBusinessUnits(businessUnitsResult.data || []);
     } catch (error) {
       console.error('Error fetching projects:', error);
       toast({
@@ -97,7 +125,7 @@ export const AdminProjects = () => {
 
       setDialogOpen(false);
       resetForm();
-      fetchProjects();
+      fetchData();
     } catch (error: any) {
       console.error('Error saving project:', error);
       toast({
@@ -122,7 +150,7 @@ export const AdminProjects = () => {
         description: "Project deleted successfully"
       });
 
-      fetchProjects();
+      fetchData();
     } catch (error: any) {
       console.error('Error deleting project:', error);
       toast({
@@ -142,7 +170,8 @@ export const AdminProjects = () => {
       total_budget: project.total_budget || 0,
       department: project.department || '',
       start_date: project.start_date || '',
-      end_date: project.end_date || ''
+      end_date: project.end_date || '',
+      team_id: project.team_id || ''
     });
     setDialogOpen(true);
   };
@@ -156,7 +185,8 @@ export const AdminProjects = () => {
       total_budget: 0,
       department: '',
       start_date: '',
-      end_date: ''
+      end_date: '',
+      team_id: ''
     });
   };
 
@@ -169,6 +199,19 @@ export const AdminProjects = () => {
       default: return 'bg-gray-100 text-gray-800';
     }
   };
+
+  // Check if user has permission to manage projects
+  if (!isAdmin && !isProjectAdmin) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground">You don't have permission to manage projects.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -183,7 +226,7 @@ export const AdminProjects = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Project Management</h2>
-          <p className="text-gray-600">Manage all system projects and their details</p>
+          <p className="text-gray-600">Manage projects and their details</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -244,6 +287,21 @@ export const AdminProjects = () => {
                 </div>
               </div>
               <div className="grid gap-2">
+                <Label htmlFor="team_id">Business Unit</Label>
+                <Select value={projectData.team_id} onValueChange={(value) => setProjectData({ ...projectData, team_id: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select business unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {businessUnits.map((unit) => (
+                      <SelectItem key={unit.id} value={unit.id}>
+                        {unit.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
                 <Label htmlFor="total_budget">Total Budget</Label>
                 <Input
                   id="total_budget"
@@ -287,9 +345,11 @@ export const AdminProjects = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>All Projects</CardTitle>
+          <CardTitle>
+            {isAdmin ? 'All Projects' : 'Your Team Projects'}
+          </CardTitle>
           <CardDescription>
-            View and manage all projects in the system
+            {isAdmin ? 'View and manage all projects in the system' : 'Projects you have access to'}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -330,13 +390,15 @@ export const AdminProjects = () => {
                       >
                         <Edit className="h-4 w-4" />
                       </Button>
-                      <Button
-                        variant="destructive"
-                        size="sm"
-                        onClick={() => deleteProject(project.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
+                      {isAdmin && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteProject(project.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>

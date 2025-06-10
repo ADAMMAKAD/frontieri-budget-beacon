@@ -297,6 +297,7 @@ export type Database = {
           full_name: string | null
           id: string
           role: string | null
+          team_id: string | null
           updated_at: string | null
         }
         Insert: {
@@ -305,6 +306,7 @@ export type Database = {
           full_name?: string | null
           id: string
           role?: string | null
+          team_id?: string | null
           updated_at?: string | null
         }
         Update: {
@@ -313,9 +315,18 @@ export type Database = {
           full_name?: string | null
           id?: string
           role?: string | null
+          team_id?: string | null
           updated_at?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "profiles_team_id_fkey"
+            columns: ["team_id"]
+            isOneToOne: false
+            referencedRelation: "business_units"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       project_milestones: {
         Row: {
@@ -410,6 +421,7 @@ export type Database = {
           spent_budget: number | null
           start_date: string | null
           status: string | null
+          team_id: string | null
           total_budget: number | null
           updated_at: string | null
         }
@@ -426,6 +438,7 @@ export type Database = {
           spent_budget?: number | null
           start_date?: string | null
           status?: string | null
+          team_id?: string | null
           total_budget?: number | null
           updated_at?: string | null
         }
@@ -442,6 +455,7 @@ export type Database = {
           spent_budget?: number | null
           start_date?: string | null
           status?: string | null
+          team_id?: string | null
           total_budget?: number | null
           updated_at?: string | null
         }
@@ -449,6 +463,13 @@ export type Database = {
           {
             foreignKeyName: "projects_business_unit_id_fkey"
             columns: ["business_unit_id"]
+            isOneToOne: false
+            referencedRelation: "business_units"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "projects_team_id_fkey"
+            columns: ["team_id"]
             isOneToOne: false
             referencedRelation: "business_units"
             referencedColumns: ["id"]
@@ -484,6 +505,10 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_user_team_id: {
+        Args: { _user_id: string }
+        Returns: string
+      }
       has_role: {
         Args: {
           _user_id: string
@@ -492,6 +517,10 @@ export type Database = {
         Returns: boolean
       }
       is_admin: {
+        Args: { _user_id: string }
+        Returns: boolean
+      }
+      is_project_admin: {
         Args: { _user_id: string }
         Returns: boolean
       }

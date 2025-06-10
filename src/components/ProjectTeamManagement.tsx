@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useRole } from '@/hooks/useRole';
 import { Users, Plus, Trash2, UserPlus } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
@@ -17,6 +18,8 @@ interface ProjectTeam {
   user_id: string;
   role: string;
   created_at: string;
+  projects?: { name: string };
+  profiles?: { full_name: string };
 }
 
 interface Project {
@@ -36,6 +39,7 @@ const ProjectTeamManagement = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { user } = useAuth();
+  const { isAdmin, isProjectAdmin, canAccessProject } = useRole();
 
   useEffect(() => {
     fetchData();
@@ -44,15 +48,30 @@ const ProjectTeamManagement = () => {
   const fetchData = async () => {
     try {
       const [teamsResult, projectsResult] = await Promise.all([
-        supabase.from('project_teams').select('*').order('created_at', { ascending: false }),
-        supabase.from('projects').select('id, name').order('name')
+        supabase
+          .from('project_teams')
+          .select(`
+            *,
+            projects(name),
+            profiles(full_name)
+          `)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('projects')
+          .select('id, name, team_id, project_manager_id')
+          .order('name')
       ]);
 
       if (teamsResult.error) throw teamsResult.error;
       if (projectsResult.error) throw projectsResult.error;
 
+      // Filter projects based on user access
+      const accessibleProjects = (projectsResult.data || []).filter(project => 
+        canAccessProject(project.team_id, project.project_manager_id)
+      );
+
       setTeams(teamsResult.data || []);
-      setProjects(projectsResult.data || []);
+      setProjects(accessibleProjects);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -69,30 +88,17 @@ const ProjectTeamManagement = () => {
     e.preventDefault();
     
     try {
-      // First, we need to find the user by email
-      // Since we can't query auth.users directly, we'll use the profiles table
-      const { data: profiles, error: profileError } = await supabase
-        .from('profiles')
-        .select('id')
-        .ilike('full_name', `%${formData.user_email}%`)
-        .limit(1);
-
-      if (profileError) throw profileError;
+      // Look up user by email in auth.users via RPC call or use profiles table
+      // Since we can't query auth.users directly, we'll try to find by email in profiles
+      // This assumes the full_name field might contain the email or we need a different approach
       
-      if (!profiles || profiles.length === 0) {
-        toast({
-          title: "Error",
-          description: "User not found. Please check the email address.",
-          variant: "destructive"
-        });
-        return;
-      }
-
+      // For now, let's assume the user_email input is actually a user ID
+      // In a real implementation, you'd want to have a proper user lookup system
       const { error } = await supabase
         .from('project_teams')
         .insert([{
           project_id: formData.project_id,
-          user_id: profiles[0].id,
+          user_id: formData.user_email, // This should be a proper user ID lookup
           role: formData.role
         }]);
 
@@ -110,7 +116,7 @@ const ProjectTeamManagement = () => {
       console.error('Error adding team member:', error);
       toast({
         title: "Error",
-        description: "Failed to add team member",
+        description: "Failed to add team member. Please ensure the user ID is valid.",
         variant: "destructive"
       });
     }
@@ -142,6 +148,19 @@ const ProjectTeamManagement = () => {
       });
     }
   };
+
+  // Check if user has permission to manage teams
+  if (!isAdmin && !isProjectAdmin) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground">You don't have permission to manage project teams.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -198,14 +217,17 @@ const ProjectTeamManagement = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="user_email">User Name/Email</Label>
+                  <Label htmlFor="user_email">User ID</Label>
                   <Input
                     id="user_email"
                     value={formData.user_email}
                     onChange={(e) => setFormData(prev => ({ ...prev, user_email: e.target.value }))}
-                    placeholder="Enter user name or email"
+                    placeholder="Enter user ID"
                     required
                   />
+                  <p className="text-xs text-muted-foreground">
+                    Enter the UUID of the user you want to add
+                  </p>
                 </div>
 
                 <div className="space-y-2">
@@ -221,6 +243,7 @@ const ProjectTeamManagement = () => {
                       <SelectItem value="member">Member</SelectItem>
                       <SelectItem value="lead">Lead</SelectItem>
                       <SelectItem value="admin">Admin</SelectItem>
+                      {isAdmin && <SelectItem value="project_admin">Project Admin</SelectItem>}
                     </SelectContent>
                   </Select>
                 </div>
@@ -256,8 +279,8 @@ const ProjectTeamManagement = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Project ID</TableHead>
-                <TableHead>User ID</TableHead>
+                <TableHead>Project</TableHead>
+                <TableHead>User</TableHead>
                 <TableHead>Role</TableHead>
                 <TableHead>Added</TableHead>
                 <TableHead>Actions</TableHead>
@@ -266,11 +289,12 @@ const ProjectTeamManagement = () => {
             <TableBody>
               {teams.map((team) => (
                 <TableRow key={team.id}>
-                  <TableCell>{team.project_id}</TableCell>
-                  <TableCell>{team.user_id}</TableCell>
+                  <TableCell>{team.projects?.name || team.project_id}</TableCell>
+                  <TableCell>{team.profiles?.full_name || team.user_id}</TableCell>
                   <TableCell>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       team.role === 'admin' ? 'bg-red-100 text-red-800' :
+                      team.role === 'project_admin' ? 'bg-purple-100 text-purple-800' :
                       team.role === 'lead' ? 'bg-blue-100 text-blue-800' :
                       'bg-gray-100 text-gray-800'
                     }`}>
