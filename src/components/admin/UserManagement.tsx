@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -50,17 +49,29 @@ export const UserManagement = () => {
           id,
           full_name,
           department,
-          created_at,
-          user_roles(role)
+          created_at
         `);
 
       if (profilesError) throw profilesError;
+
+      // Get user roles separately
+      const { data: userRoles, error: rolesError } = await supabase
+        .from('user_roles')
+        .select('user_id, role');
+
+      if (rolesError) throw rolesError;
+
+      // Create a map of user roles
+      const rolesMap = new Map();
+      userRoles?.forEach(ur => {
+        rolesMap.set(ur.user_id, ur.role);
+      });
 
       const usersWithRoles = (profiles || []).map(profile => ({
         id: profile.id,
         full_name: profile.full_name,
         department: profile.department,
-        role: profile.user_roles?.[0]?.role || 'user',
+        role: rolesMap.get(profile.id) || 'user',
         created_at: profile.created_at
       }));
 

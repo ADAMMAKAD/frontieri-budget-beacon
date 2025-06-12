@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -48,37 +47,55 @@ const ProjectTeamManagement = () => {
 
   const fetchData = async () => {
     try {
-      const [teamsResult, projectsResult, usersResult] = await Promise.all([
-        supabase
-          .from('project_teams')
-          .select(`
-            *,
-            projects!inner(name),
-            profiles!inner(full_name)
-          `)
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('projects')
-          .select('id, name, team_id, project_manager_id')
-          .order('name'),
-        supabase
-          .from('profiles')
-          .select('id, full_name')
-          .order('full_name')
-      ]);
+      // Fetch teams with proper joins
+      const { data: teamsData, error: teamsError } = await supabase
+        .from('project_teams')
+        .select(`
+          id,
+          project_id,
+          user_id,
+          role,
+          created_at
+        `)
+        .order('created_at', { ascending: false });
 
-      if (teamsResult.error) throw teamsResult.error;
-      if (projectsResult.error) throw projectsResult.error;
-      if (usersResult.error) throw usersResult.error;
+      if (teamsError) throw teamsError;
+
+      // Fetch project names separately
+      const { data: projectsData, error: projectsError } = await supabase
+        .from('projects')
+        .select('id, name, team_id, project_manager_id')
+        .order('name');
+
+      if (projectsError) throw projectsError;
+
+      // Fetch user profiles separately
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .order('full_name');
+
+      if (profilesError) throw profilesError;
+
+      // Create lookup maps
+      const projectsMap = new Map(projectsData.map(p => [p.id, p]));
+      const profilesMap = new Map(profilesData.map(p => [p.id, p]));
+
+      // Combine the data
+      const teamsWithDetails = teamsData.map(team => ({
+        ...team,
+        projects: projectsMap.get(team.project_id) ? { name: projectsMap.get(team.project_id)!.name } : undefined,
+        profiles: profilesMap.get(team.user_id) ? { full_name: profilesMap.get(team.user_id)!.full_name } : undefined
+      }));
 
       // Filter projects based on user access
-      const accessibleProjects = (projectsResult.data || []).filter(project => 
+      const accessibleProjects = projectsData.filter(project => 
         canAccessProject(project.team_id, project.project_manager_id)
       );
 
-      setTeams(teamsResult.data || []);
+      setTeams(teamsWithDetails);
       setProjects(accessibleProjects);
-      setAvailableUsers(usersResult.data || []);
+      setAvailableUsers(profilesData);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
