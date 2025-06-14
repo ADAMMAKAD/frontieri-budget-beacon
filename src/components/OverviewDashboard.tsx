@@ -4,6 +4,9 @@ import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { TrendingUp, TrendingDown, DollarSign, AlertTriangle, CheckCircle } from "lucide-react";
 import { BudgetChart } from "@/components/BudgetChart";
+import { EnhancedBudgetChart } from "@/components/EnhancedBudgetChart";
+import { DashboardMetrics } from "@/components/DashboardMetrics";
+import { ProjectFilter } from "@/components/ProjectFilter";
 import { RecentActivity } from "@/components/RecentActivity";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useState, useEffect } from "react";
@@ -15,68 +18,80 @@ interface Project {
   total_budget: number;
   spent_budget: number;
   status: string;
+  start_date?: string;
+  team_id?: string;
+}
+
+interface Team {
+  id: string;
+  name: string;
 }
 
 export function OverviewDashboard() {
   const { formatCurrency } = useCurrency();
   const [projects, setProjects] = useState<Project[]>([]);
+  const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
+  
+  // Filter states
+  const [searchTerm, setSearchTerm] = useState('');
+  const [selectedStatus, setSelectedStatus] = useState('all');
+  const [selectedYear, setSelectedYear] = useState('all');
+  const [selectedTeam, setSelectedTeam] = useState('all');
 
   useEffect(() => {
-    fetchProjects();
+    fetchData();
   }, []);
 
-  const fetchProjects = async () => {
+  const fetchData = async () => {
     try {
-      const { data, error } = await supabase
-        .from('projects')
-        .select('id, name, total_budget, spent_budget, status')
-        .limit(4);
+      const [projectsResponse, teamsResponse] = await Promise.all([
+        supabase
+          .from('projects')
+          .select('id, name, total_budget, spent_budget, status, start_date, team_id'),
+        supabase
+          .from('business_units')
+          .select('id, name')
+      ]);
 
-      if (error) {
-        console.error('Error fetching projects:', error);
+      if (projectsResponse.error) {
+        console.error('Error fetching projects:', projectsResponse.error);
         setProjects([]);
       } else {
-        setProjects(data || []);
+        setProjects(projectsResponse.data || []);
+      }
+
+      if (teamsResponse.error) {
+        console.error('Error fetching teams:', teamsResponse.error);
+        setTeams([]);
+      } else {
+        setTeams(teamsResponse.data || []);
       }
     } catch (error) {
       console.error('Error:', error);
       setProjects([]);
+      setTeams([]);
     } finally {
       setLoading(false);
     }
   };
 
-  const budgetMetrics = [
-    {
-      title: "Total Budget",
-      value: formatCurrency(2450000),
-      change: "+12.5%",
-      trend: "up",
-      description: "Across all projects"
-    },
-    {
-      title: "Allocated Budget",
-      value: formatCurrency(1890000),
-      change: "+8.2%",
-      trend: "up",
-      description: "77% of total budget"
-    },
-    {
-      title: "Remaining Budget",
-      value: formatCurrency(560000),
-      change: "-4.1%",
-      trend: "down",
-      description: "23% available"
-    },
-    {
-      title: "Budget Utilization",
-      value: "77%",
-      change: "+5.3%",
-      trend: "up",
-      description: "YTD performance"
-    }
-  ];
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSelectedStatus('all');
+    setSelectedYear('all');
+    setSelectedTeam('all');
+  };
+
+  const filteredProjects = projects.filter(project => {
+    const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const matchesStatus = selectedStatus === 'all' || project.status === selectedStatus;
+    const matchesYear = selectedYear === 'all' || 
+      (project.start_date && new Date(project.start_date).getFullYear().toString() === selectedYear);
+    const matchesTeam = selectedTeam === 'all' || project.team_id === selectedTeam;
+
+    return matchesSearch && matchesStatus && matchesYear && matchesTeam;
+  });
 
   return (
     <div className="p-6 space-y-6">
@@ -94,38 +109,26 @@ export function OverviewDashboard() {
         </div>
       </div>
 
-      {/* Key Metrics */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        {budgetMetrics.map((metric, index) => (
-          <Card key={index} className="border-0 shadow-lg bg-card hover:shadow-xl transition-shadow duration-300">
-            <CardHeader className="pb-3">
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-sm font-medium text-muted-foreground">{metric.title}</CardTitle>
-                {metric.trend === "up" ? (
-                  <TrendingUp className="h-4 w-4 text-green-500" />
-                ) : (
-                  <TrendingDown className="h-4 w-4 text-red-500" />
-                )}
-              </div>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-2">
-                <p className="text-2xl font-bold">{metric.value}</p>
-                <div className="flex items-center space-x-2">
-                  <Badge variant={metric.trend === "up" ? "default" : "destructive"} className="text-xs">
-                    {metric.change}
-                  </Badge>
-                  <p className="text-sm text-muted-foreground">{metric.description}</p>
-                </div>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Enhanced Metrics Dashboard */}
+      <DashboardMetrics />
 
-      {/* Charts and Activity */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        <BudgetChart />
+      {/* Project Filters */}
+      <ProjectFilter
+        searchTerm={searchTerm}
+        setSearchTerm={setSearchTerm}
+        selectedStatus={selectedStatus}
+        setSelectedStatus={setSelectedStatus}
+        selectedYear={selectedYear}
+        setSelectedYear={setSelectedYear}
+        selectedTeam={selectedTeam}
+        setSelectedTeam={setSelectedTeam}
+        onClearFilters={clearFilters}
+        teams={teams}
+      />
+
+      {/* Enhanced Charts and Activity */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <EnhancedBudgetChart />
         <RecentActivity />
       </div>
 
@@ -134,22 +137,27 @@ export function OverviewDashboard() {
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <DollarSign className="h-5 w-5 text-blue-600" />
-            <span>Project Budget Status</span>
+            <span>Filtered Project Budget Status</span>
+            {filteredProjects.length !== projects.length && (
+              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                {filteredProjects.length} of {projects.length}
+              </Badge>
+            )}
           </CardTitle>
-          <CardDescription>Current budget allocation and spending across active projects</CardDescription>
+          <CardDescription>Current budget allocation and spending across filtered projects</CardDescription>
         </CardHeader>
         <CardContent>
           {loading ? (
             <div className="flex items-center justify-center p-8">
               <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
-          ) : projects.length === 0 ? (
+          ) : filteredProjects.length === 0 ? (
             <div className="text-center p-8 text-muted-foreground">
-              <p>No projects found. Create some projects to see budget status here.</p>
+              <p>No projects found matching the current filters. Try adjusting your search criteria.</p>
             </div>
           ) : (
             <div className="space-y-4">
-              {projects.map((project, index) => {
+              {filteredProjects.slice(0, 6).map((project, index) => {
                 const budget = project.total_budget || 0;
                 const spent = project.spent_budget || 0;
                 const utilization = budget > 0 ? (spent / budget) * 100 : 0;
@@ -196,6 +204,13 @@ export function OverviewDashboard() {
                   </div>
                 );
               })}
+              {filteredProjects.length > 6 && (
+                <div className="text-center p-4">
+                  <p className="text-sm text-muted-foreground">
+                    Showing 6 of {filteredProjects.length} filtered projects
+                  </p>
+                </div>
+              )}
             </div>
           )}
         </CardContent>
