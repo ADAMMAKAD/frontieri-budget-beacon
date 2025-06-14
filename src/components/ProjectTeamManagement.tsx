@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -8,8 +9,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useRole } from '@/hooks/useRole';
-import { Users, Plus, Trash2, UserPlus } from 'lucide-react';
+import { Users, Plus, Trash2, UserPlus, Eye } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ProjectDetailsModal } from '@/components/ProjectDetailsModal';
 
 interface ProjectTeam {
   id: string;
@@ -24,12 +26,26 @@ interface ProjectTeam {
 interface Project {
   id: string;
   name: string;
+  description?: string;
+  status: string;
+  total_budget: number;
+  spent_budget: number;
+  allocated_budget?: number;
+  start_date?: string;
+  end_date?: string;
+  department?: string;
+  team_id?: string;
+  project_manager_id?: string;
+  created_at: string;
 }
 
 const ProjectTeamManagement = () => {
   const [teams, setTeams] = useState<ProjectTeam[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
   const [availableUsers, setAvailableUsers] = useState<{id: string, full_name: string | null}[]>([]);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
   const [formData, setFormData] = useState({
     project_id: '',
@@ -61,7 +77,15 @@ const ProjectTeamManagement = () => {
 
       if (teamsError) throw teamsError;
 
-      // Fetch project names separately
+      // Fetch ALL projects for the dropdown (not filtered by access)
+      const { data: allProjectsData, error: allProjectsError } = await supabase
+        .from('projects')
+        .select('*')
+        .order('name');
+
+      if (allProjectsError) throw allProjectsError;
+
+      // Fetch project names separately for access-controlled view
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
         .select('id, name, team_id, project_manager_id')
@@ -88,13 +112,14 @@ const ProjectTeamManagement = () => {
         profiles: profilesMap.get(team.user_id) ? { full_name: profilesMap.get(team.user_id)!.full_name } : undefined
       }));
 
-      // Filter projects based on user access
+      // Filter projects based on user access for viewing
       const accessibleProjects = projectsData.filter(project => 
         canAccessProject(project.team_id, project.project_manager_id)
       );
 
       setTeams(teamsWithDetails);
       setProjects(accessibleProjects);
+      setAllProjects(allProjectsData || []); // Store all projects for dropdown
       setAvailableUsers(profilesData);
     } catch (error) {
       console.error('Error fetching data:', error);
@@ -167,6 +192,18 @@ const ProjectTeamManagement = () => {
     }
   };
 
+  const getProject = (projectId: string) => {
+    return allProjects.find(p => p.id === projectId);
+  };
+
+  const handleViewProject = (projectId: string) => {
+    const project = getProject(projectId);
+    if (project) {
+      setSelectedProject(project);
+      setProjectModalOpen(true);
+    }
+  };
+
   // Check if user has permission to manage teams
   if (!isAdmin && !isProjectAdmin) {
     return (
@@ -211,21 +248,23 @@ const ProjectTeamManagement = () => {
               <UserPlus className="h-5 w-5" />
               <span>Add Team Member</span>
             </CardTitle>
+            <CardDescription>Assign team members to projects</CardDescription>
           </CardHeader>
           <CardContent>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="project">Project</Label>
+                  <Label htmlFor="project">Project *</Label>
                   <Select
                     value={formData.project_id}
                     onValueChange={(value) => setFormData(prev => ({ ...prev, project_id: value }))}
+                    required
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select project" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projects.map((project) => (
+                      {allProjects.map((project) => (
                         <SelectItem key={project.id} value={project.id}>
                           {project.name}
                         </SelectItem>
@@ -235,10 +274,11 @@ const ProjectTeamManagement = () => {
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="user_id">User</Label>
+                  <Label htmlFor="user_id">Team Member *</Label>
                   <Select
                     value={formData.user_id}
                     onValueChange={(value) => setFormData(prev => ({ ...prev, user_id: value }))}
+                    required
                   >
                     <SelectTrigger>
                       <SelectValue placeholder="Select user" />
@@ -294,25 +334,37 @@ const ProjectTeamManagement = () => {
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
             <Users className="h-5 w-5" />
-            <span>Project Teams</span>
+            <span>Current Project Team Assignments</span>
           </CardTitle>
-          <CardDescription>Current project team assignments</CardDescription>
+          <CardDescription>Active team member assignments across projects</CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Project</TableHead>
-                <TableHead>User</TableHead>
+                <TableHead>Project Name</TableHead>
+                <TableHead>Team Member</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Added</TableHead>
+                <TableHead>Assigned Date</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {teams.map((team) => (
                 <TableRow key={team.id}>
-                  <TableCell>{team.projects?.name || team.project_id}</TableCell>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center space-x-2">
+                      <span>{team.projects?.name || team.project_id}</span>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleViewProject(team.project_id)}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Eye className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </TableCell>
                   <TableCell>{team.profiles?.full_name || 'Unnamed User'}</TableCell>
                   <TableCell>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
@@ -336,10 +388,26 @@ const ProjectTeamManagement = () => {
                   </TableCell>
                 </TableRow>
               ))}
+              {teams.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    No team assignments found. Add some team members to get started.
+                  </TableCell>
+                </TableRow>
+              )}
             </TableBody>
           </Table>
         </CardContent>
       </Card>
+
+      <ProjectDetailsModal
+        project={selectedProject}
+        isOpen={projectModalOpen}
+        onClose={() => {
+          setProjectModalOpen(false);
+          setSelectedProject(null);
+        }}
+      />
     </div>
   );
 };

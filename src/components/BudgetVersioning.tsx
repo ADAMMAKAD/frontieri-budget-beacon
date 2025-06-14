@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { FileText, Plus, Eye, CheckCircle, XCircle } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ProjectDetailsModal } from '@/components/ProjectDetailsModal';
 
 interface BudgetVersion {
   id: string;
@@ -28,11 +28,24 @@ interface BudgetVersion {
 interface Project {
   id: string;
   name: string;
+  description?: string;
+  status: string;
+  total_budget: number;
+  spent_budget: number;
+  allocated_budget?: number;
+  start_date?: string;
+  end_date?: string;
+  department?: string;
+  team_id?: string;
+  project_manager_id?: string;
+  created_at: string;
 }
 
 const BudgetVersioning = () => {
   const [versions, setVersions] = useState<BudgetVersion[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [formData, setFormData] = useState({
     project_id: '',
@@ -51,7 +64,7 @@ const BudgetVersioning = () => {
     try {
       const [versionsResult, projectsResult] = await Promise.all([
         supabase.from('budget_versions').select('*').order('created_at', { ascending: false }),
-        supabase.from('projects').select('id, name').order('name')
+        supabase.from('projects').select('*').order('name')
       ]);
 
       if (versionsResult.error) throw versionsResult.error;
@@ -75,7 +88,6 @@ const BudgetVersioning = () => {
     e.preventDefault();
     
     try {
-      // Get the next version number for this project
       const { data: existingVersions, error: versionError } = await supabase
         .from('budget_versions')
         .select('version_number')
@@ -187,6 +199,23 @@ const BudgetVersioning = () => {
     }
   };
 
+  const getProjectName = (projectId: string) => {
+    const project = projects.find(p => p.id === projectId);
+    return project?.name || projectId;
+  };
+
+  const getProject = (projectId: string) => {
+    return projects.find(p => p.id === projectId);
+  };
+
+  const handleViewProject = (projectId: string) => {
+    const project = getProject(projectId);
+    if (project) {
+      setSelectedProject(project);
+      setProjectModalOpen(true);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -294,7 +323,7 @@ const BudgetVersioning = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Project</TableHead>
+                <TableHead>Project Name</TableHead>
                 <TableHead>Version</TableHead>
                 <TableHead>Title</TableHead>
                 <TableHead>Status</TableHead>
@@ -305,7 +334,9 @@ const BudgetVersioning = () => {
             <TableBody>
               {versions.map((version) => (
                 <TableRow key={version.id}>
-                  <TableCell>{version.project_id}</TableCell>
+                  <TableCell className="font-medium">
+                    {getProjectName(version.project_id)}
+                  </TableCell>
                   <TableCell>v{version.version_number}</TableCell>
                   <TableCell className="font-medium">{version.title}</TableCell>
                   <TableCell>
@@ -316,7 +347,11 @@ const BudgetVersioning = () => {
                   <TableCell>{new Date(version.created_at).toLocaleDateString()}</TableCell>
                   <TableCell>
                     <div className="flex space-x-2">
-                      <Button variant="outline" size="sm">
+                      <Button 
+                        variant="outline" 
+                        size="sm"
+                        onClick={() => handleViewProject(version.project_id)}
+                      >
                         <Eye className="h-4 w-4" />
                       </Button>
                       {version.status === 'draft' && (
@@ -345,6 +380,15 @@ const BudgetVersioning = () => {
           </Table>
         </CardContent>
       </Card>
+
+      <ProjectDetailsModal
+        project={selectedProject}
+        isOpen={projectModalOpen}
+        onClose={() => {
+          setProjectModalOpen(false);
+          setSelectedProject(null);
+        }}
+      />
     </div>
   );
 };

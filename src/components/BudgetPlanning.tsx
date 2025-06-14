@@ -1,265 +1,375 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Progress } from '@/components/ui/progress';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Calendar, DollarSign, Users } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
+import { useCurrency } from '@/contexts/CurrencyContext';
+import { supabase } from '@/integrations/supabase/client';
+import { Plus, DollarSign, TrendingUp, AlertTriangle, Settings } from 'lucide-react';
+import { BudgetStatusIndicator } from '@/components/BudgetStatusIndicator';
 
 interface Project {
   id: string;
   name: string;
-  description: string;
-  status: string;
-  start_date: string;
-  end_date: string;
   total_budget: number;
-  allocated_budget: number;
   spent_budget: number;
-  department: string;
+  start_date?: string;
+  end_date?: string;
+  status: string;
+  description?: string;
 }
 
-const BudgetPlanning = () => {
+interface BudgetCategory {
+  id: string;
+  name: string;
+  allocated_amount: number;
+  spent_amount: number;
+  project_id: string;
+}
+
+export const BudgetPlanning = () => {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [isCreating, setIsCreating] = useState(false);
-  const [newProject, setNewProject] = useState({
+  const [categories, setCategories] = useState<BudgetCategory[]>([]);
+  const [selectedProject, setSelectedProject] = useState<string>('');
+  const [loading, setLoading] = useState(true);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [thresholdDialogOpen, setThresholdDialogOpen] = useState(false);
+  const [categoryData, setCategoryData] = useState({
     name: '',
-    description: '',
-    start_date: '',
-    end_date: '',
-    total_budget: '',
-    department: ''
+    allocated_amount: 0,
+    project_id: ''
   });
+  const [budgetThresholds, setBudgetThresholds] = useState({
+    warning: 80,
+    danger: 100
+  });
+  const { formatCurrency } = useCurrency();
   const { toast } = useToast();
-  const { user } = useAuth();
 
   useEffect(() => {
-    fetchProjects();
+    fetchData();
   }, []);
 
-  const fetchProjects = async () => {
-    const { data, error } = await supabase
-      .from('projects')
-      .select('*')
-      .order('created_at', { ascending: false });
+  const fetchData = async () => {
+    try {
+      const [projectsResult, categoriesResult] = await Promise.all([
+        supabase.from('projects').select('*').order('name'),
+        supabase.from('budget_categories').select('*').order('name')
+      ]);
 
-    if (error) {
+      if (projectsResult.error) throw projectsResult.error;
+      if (categoriesResult.error) throw categoriesResult.error;
+
+      setProjects(projectsResult.data || []);
+      setCategories(categoriesResult.data || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch projects",
+        description: "Failed to load budget data",
         variant: "destructive"
       });
-    } else {
-      setProjects(data || []);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const createProject = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const { error } = await supabase
-      .from('projects')
-      .insert([{
-        ...newProject,
-        total_budget: parseFloat(newProject.total_budget),
-        project_manager_id: user?.id
-      }]);
+  const handleCreateCategory = async () => {
+    try {
+      const { error } = await supabase
+        .from('budget_categories')
+        .insert([categoryData]);
 
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to create project",
-        variant: "destructive"
-      });
-    } else {
+      if (error) throw error;
+
       toast({
         title: "Success",
-        description: "Project created successfully"
+        description: "Budget category created successfully"
       });
-      setIsCreating(false);
-      setNewProject({
-        name: '',
-        description: '',
-        start_date: '',
-        end_date: '',
-        total_budget: '',
-        department: ''
+
+      setCategoryData({ name: '', allocated_amount: 0, project_id: '' });
+      setDialogOpen(false);
+      fetchData();
+    } catch (error) {
+      console.error('Error creating category:', error);
+      toast({
+        title: "Error",
+        description: "Failed to create budget category",
+        variant: "destructive"
       });
-      fetchProjects();
     }
   };
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'planning': return 'bg-yellow-100 text-yellow-800';
-      case 'active': return 'bg-green-100 text-green-800';
-      case 'completed': return 'bg-blue-100 text-blue-800';
-      case 'on-hold': return 'bg-red-100 text-red-800';
-      default: return 'bg-gray-100 text-gray-800';
-    }
+  const filteredCategories = selectedProject 
+    ? categories.filter(cat => cat.project_id === selectedProject)
+    : categories;
+
+  const getSelectedProjectData = () => {
+    return projects.find(p => p.id === selectedProject);
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Budget Planning</h2>
-          <p className="text-gray-600 mt-1">Create and manage project budgets</p>
+          <p className="text-gray-600 mt-1">Plan and allocate budgets across projects and categories</p>
         </div>
-        <Button 
-          onClick={() => setIsCreating(true)}
-          className="bg-gradient-to-r from-blue-600 to-purple-600"
-        >
-          <Plus className="mr-2 h-4 w-4" />
-          New Project
-        </Button>
-      </div>
-
-      {isCreating && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Create New Project</CardTitle>
-            <CardDescription>Set up a new project with budget planning</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={createProject} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="flex space-x-2">
+          <Dialog open={thresholdDialogOpen} onOpenChange={setThresholdDialogOpen}>
+            <DialogTrigger asChild>
+              <Button variant="outline">
+                <Settings className="mr-2 h-4 w-4" />
+                Budget Thresholds
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Configure Budget Thresholds</DialogTitle>
+                <DialogDescription>
+                  Set warning and danger thresholds for budget utilization alerts
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
                 <div className="space-y-2">
-                  <Label htmlFor="projectName">Project Name</Label>
+                  <Label htmlFor="warning">Warning Threshold (%)</Label>
                   <Input
-                    id="projectName"
-                    value={newProject.name}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, name: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="department">Department</Label>
-                  <Input
-                    id="department"
-                    value={newProject.department}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, department: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="startDate">Start Date</Label>
-                  <Input
-                    id="startDate"
-                    type="date"
-                    value={newProject.start_date}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, start_date: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="endDate">End Date</Label>
-                  <Input
-                    id="endDate"
-                    type="date"
-                    value={newProject.end_date}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, end_date: e.target.value }))}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="totalBudget">Total Budget</Label>
-                  <Input
-                    id="totalBudget"
+                    id="warning"
                     type="number"
-                    step="0.01"
-                    value={newProject.total_budget}
-                    onChange={(e) => setNewProject(prev => ({ ...prev, total_budget: e.target.value }))}
-                    required
+                    value={budgetThresholds.warning}
+                    onChange={(e) => setBudgetThresholds(prev => ({ 
+                      ...prev, 
+                      warning: Number(e.target.value) 
+                    }))}
+                    min="0"
+                    max="100"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="danger">Danger Threshold (%)</Label>
+                  <Input
+                    id="danger"
+                    type="number"
+                    value={budgetThresholds.danger}
+                    onChange={(e) => setBudgetThresholds(prev => ({ 
+                      ...prev, 
+                      danger: Number(e.target.value) 
+                    }))}
+                    min="0"
+                    max="200"
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={newProject.description}
-                  onChange={(e) => setNewProject(prev => ({ ...prev, description: e.target.value }))}
-                  rows={3}
-                />
-              </div>
-              <div className="flex space-x-2">
-                <Button type="submit" className="bg-gradient-to-r from-blue-600 to-purple-600">
-                  Create Project
+              <DialogFooter>
+                <Button onClick={() => setThresholdDialogOpen(false)}>
+                  Save Thresholds
                 </Button>
-                <Button type="button" variant="outline" onClick={() => setIsCreating(false)}>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Category
+              </Button>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Create Budget Category</DialogTitle>
+                <DialogDescription>
+                  Add a new budget category for better expense tracking
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="project">Project</Label>
+                  <Select
+                    value={categoryData.project_id}
+                    onValueChange={(value) => setCategoryData(prev => ({ ...prev, project_id: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="name">Category Name</Label>
+                  <Input
+                    id="name"
+                    value={categoryData.name}
+                    onChange={(e) => setCategoryData(prev => ({ ...prev, name: e.target.value }))}
+                    placeholder="e.g., Marketing, Development, Operations"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="amount">Allocated Amount</Label>
+                  <Input
+                    id="amount"
+                    type="number"
+                    value={categoryData.allocated_amount}
+                    onChange={(e) => setCategoryData(prev => ({ ...prev, allocated_amount: Number(e.target.value) }))}
+                    placeholder="0"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
                 </Button>
-              </div>
-            </form>
+                <Button onClick={handleCreateCategory}>
+                  Create Category
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </div>
+
+      {/* Project Filter */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Filter by Project</CardTitle>
+          <CardDescription>Select a project to view its budget categories</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Select value={selectedProject} onValueChange={setSelectedProject}>
+            <SelectTrigger className="w-full max-w-md">
+              <SelectValue placeholder="All Projects" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All Projects</SelectItem>
+              {projects.map((project) => (
+                <SelectItem key={project.id} value={project.id}>
+                  {project.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </CardContent>
+      </Card>
+
+      {/* Selected Project Overview */}
+      {selectedProject && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <DollarSign className="h-5 w-5 text-green-600" />
+              <span>Project Budget Overview</span>
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {(() => {
+              const projectData = getSelectedProjectData();
+              if (!projectData) return null;
+              
+              return (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-muted-foreground">Total Budget</p>
+                      <p className="text-2xl font-bold">{formatCurrency(projectData.total_budget)}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-muted-foreground">Spent Amount</p>
+                      <p className="text-2xl font-bold text-red-600">{formatCurrency(projectData.spent_budget)}</p>
+                    </div>
+                    <div className="space-y-2">
+                      <p className="text-sm font-medium text-muted-foreground">Remaining</p>
+                      <p className="text-2xl font-bold text-blue-600">
+                        {formatCurrency(projectData.total_budget - projectData.spent_budget)}
+                      </p>
+                    </div>
+                  </div>
+                  
+                  <BudgetStatusIndicator
+                    totalBudget={projectData.total_budget}
+                    spentBudget={projectData.spent_budget}
+                    startDate={projectData.start_date}
+                    endDate={projectData.end_date}
+                    thresholds={budgetThresholds}
+                    showPercentage={true}
+                  />
+                </div>
+              );
+            })()}
           </CardContent>
         </Card>
       )}
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {projects.map((project) => (
-          <Card key={project.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg">{project.name}</CardTitle>
-                <Badge className={getStatusColor(project.status)}>
-                  {project.status}
-                </Badge>
-              </div>
-              <CardDescription>{project.description}</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <Calendar className="h-4 w-4" />
-                <span>{new Date(project.start_date).toLocaleDateString()} - {new Date(project.end_date).toLocaleDateString()}</span>
-              </div>
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <DollarSign className="h-4 w-4" />
-                <span>Budget: R${project.total_budget?.toLocaleString('pt-BR')}</span>
-              </div>
-              <div className="flex items-center space-x-2 text-sm text-gray-600">
-                <Users className="h-4 w-4" />
-                <span>{project.department}</span>
-              </div>
-              <div className="w-full bg-gray-200 rounded-full h-2">
-                <div 
-                  className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full" 
-                  style={{ 
-                    width: `${project.total_budget > 0 ? (project.spent_budget / project.total_budget) * 100 : 0}%` 
-                  }}
-                ></div>
-              </div>
-              <div className="text-xs text-gray-500">
-                Spent: R${project.spent_budget?.toLocaleString('pt-BR')} of R${project.total_budget?.toLocaleString('pt-BR')}
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {projects.length === 0 && !isCreating && (
-        <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <DollarSign className="h-8 w-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
-          <p className="text-gray-600 mb-4">Create your first project to start budget planning</p>
-          <Button 
-            onClick={() => setIsCreating(true)}
-            className="bg-gradient-to-r from-blue-600 to-purple-600"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Create Project
-          </Button>
-        </div>
-      )}
+      {/* Budget Categories */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <TrendingUp className="h-5 w-5 text-blue-600" />
+            <span>Budget Categories</span>
+          </CardTitle>
+          <CardDescription>
+            {selectedProject 
+              ? `Categories for ${projects.find(p => p.id === selectedProject)?.name}`
+              : 'All budget categories across projects'
+            }
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {filteredCategories.length === 0 ? (
+            <div className="text-center p-8 text-muted-foreground">
+              <p>No budget categories found.</p>
+              <p className="text-sm">Create your first category to get started.</p>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {filteredCategories.map((category) => {
+                const utilization = category.allocated_amount > 0 
+                  ? (category.spent_amount / category.allocated_amount) * 100 
+                  : 0;
+                
+                return (
+                  <div key={category.id} className="p-4 rounded-lg bg-muted hover:bg-muted/80 transition-colors duration-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="font-medium">{category.name}</h4>
+                      <Badge variant={utilization > 100 ? "destructive" : utilization > 80 ? "secondary" : "default"}>
+                        {utilization.toFixed(1)}% used
+                      </Badge>
+                    </div>
+                    
+                    <BudgetStatusIndicator
+                      totalBudget={category.allocated_amount}
+                      spentBudget={category.spent_amount}
+                      thresholds={budgetThresholds}
+                      showPercentage={false}
+                    />
+                    
+                    <Progress value={Math.min(utilization, 100)} className="h-2 mt-2" />
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
-
-export default BudgetPlanning;
