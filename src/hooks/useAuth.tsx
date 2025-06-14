@@ -1,13 +1,19 @@
 
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { User, Session } from '@supabase/supabase-js';
-import { supabase } from '@/integrations/supabase/client';
+import { apiService } from '@/services/api';
+
+interface User {
+  id: string;
+  email: string;
+  full_name: string;
+  department: string;
+  role: string;
+}
 
 interface AuthContextType {
   user: User | null;
-  session: Session | null;
   loading: boolean;
-  signUp: (email: string, password: string, fullName: string, department: string) => Promise<{ error: any }>;
+  signUp: (email: string, password: string, fullName: string, department: string, role?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
 }
@@ -16,60 +22,84 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        setSession(session);
-        setUser(session?.user ?? null);
-        setLoading(false);
-      }
-    );
-
-    // Get initial session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-      setUser(session?.user ?? null);
-      setLoading(false);
-    });
-
-    return () => subscription.unsubscribe();
+    checkAuthState();
   }, []);
 
-  const signUp = async (email: string, password: string, fullName: string, department: string) => {
-    const redirectUrl = `${window.location.origin}/`;
-    
-    const { error } = await supabase.auth.signUp({
-      email,
-      password,
-      options: {
-        emailRedirectTo: redirectUrl,
-        data: {
-          full_name: fullName,
-          department: department
+  const checkAuthState = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        apiService.setToken(token);
+        const response = await apiService.getCurrentUser();
+        if (response.data) {
+          setUser(response.data);
+        } else {
+          apiService.clearToken();
         }
       }
-    });
-    return { error };
+    } catch (error) {
+      console.error('Auth check failed:', error);
+      apiService.clearToken();
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const signUp = async (email: string, password: string, fullName: string, department: string, role?: string) => {
+    try {
+      const response = await apiService.register({
+        email,
+        password,
+        full_name: fullName,
+        department,
+        role: role || 'user'
+      });
+
+      if (response.error) {
+        return { error: { message: response.error } };
+      }
+
+      return { error: null };
+    } catch (error) {
+      return { error };
+    }
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
-      email,
-      password
-    });
-    return { error };
+    try {
+      const response = await apiService.login(email, password);
+      
+      if (response.error) {
+        return { error: { message: response.error } };
+      }
+
+      if (response.data) {
+        apiService.setToken(response.data.token);
+        setUser(response.data.user);
+      }
+
+      return { error: null };
+    } catch (error) {
+      return { error };
+    }
   };
 
   const signOut = async () => {
-    await supabase.auth.signOut();
+    try {
+      await apiService.logout();
+    } catch (error) {
+      console.error('Logout error:', error);
+    } finally {
+      apiService.clearToken();
+      setUser(null);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, session, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

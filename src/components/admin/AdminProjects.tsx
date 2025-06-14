@@ -1,5 +1,5 @@
-
 import { useState, useEffect } from 'react';
+import { apiService } from '@/services/api';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,6 +38,7 @@ interface BusinessUnit {
 export const AdminProjects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
+  const [projectAdmins, setProjectAdmins] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -49,10 +50,11 @@ export const AdminProjects = () => {
     department: '',
     start_date: '',
     end_date: '',
-    team_id: ''
+    team_id: '',
+    project_manager_id: ''
   });
   const { toast } = useToast();
-  const { isAdmin, isProjectAdmin, canAccessProject } = useRole();
+  const { isAdmin, canCreateProject, canAccessProject } = useRole();
 
   useEffect(() => {
     fetchData();
@@ -60,19 +62,15 @@ export const AdminProjects = () => {
 
   const fetchData = async () => {
     try {
-      const [projectsResult, businessUnitsResult] = await Promise.all([
-        supabase
-          .from('projects')
-          .select('*')
-          .order('created_at', { ascending: false }),
-        supabase
-          .from('business_units')
-          .select('id, name')
-          .order('name')
+      const [projectsResult, businessUnitsResult, usersResult] = await Promise.all([
+        apiService.getProjects(),
+        apiService.getBusinessUnits(),
+        apiService.getUsers()
       ]);
 
-      if (projectsResult.error) throw projectsResult.error;
-      if (businessUnitsResult.error) throw businessUnitsResult.error;
+      if (projectsResult.error) throw new Error(projectsResult.error);
+      if (businessUnitsResult.error) throw new Error(businessUnitsResult.error);
+      if (usersResult.error) throw new Error(usersResult.error);
 
       // Filter projects based on user access if not admin
       let filteredProjects = projectsResult.data || [];
@@ -82,8 +80,14 @@ export const AdminProjects = () => {
         );
       }
 
+      // Filter users to show only project admins for assignment
+      const projectAdminUsers = (usersResult.data || []).filter(user => 
+        user.role === 'project_admin' || user.role === 'admin'
+      );
+
       setProjects(filteredProjects);
       setBusinessUnits(businessUnitsResult.data || []);
+      setProjectAdmins(projectAdminUsers);
     } catch (error) {
       console.error('Error fetching projects:', error);
       toast({
@@ -99,27 +103,20 @@ export const AdminProjects = () => {
   const saveProject = async () => {
     try {
       if (editingProject) {
-        const { error } = await supabase
-          .from('projects')
-          .update(projectData)
-          .eq('id', editingProject.id);
-
-        if (error) throw error;
+        const response = await apiService.updateProject(editingProject.id, projectData);
+        if (response.error) throw new Error(response.error);
 
         toast({
           title: "Success",
           description: "Project updated successfully"
         });
       } else {
-        const { error } = await supabase
-          .from('projects')
-          .insert([projectData]);
-
-        if (error) throw error;
+        const response = await apiService.createProject(projectData);
+        if (response.error) throw new Error(response.error);
 
         toast({
           title: "Success",
-          description: "Project created successfully"
+          description: "Project created successfully and project admin assigned"
         });
       }
 
@@ -137,13 +134,11 @@ export const AdminProjects = () => {
   };
 
   const deleteProject = async (id: string) => {
-    try {
-      const { error } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', id);
+    if (!confirm('Are you sure you want to delete this project?')) return;
 
-      if (error) throw error;
+    try {
+      const response = await apiService.deleteProject(id);
+      if (response.error) throw new Error(response.error);
 
       toast({
         title: "Success",
@@ -171,7 +166,8 @@ export const AdminProjects = () => {
       department: project.department || '',
       start_date: project.start_date || '',
       end_date: project.end_date || '',
-      team_id: project.team_id || ''
+      team_id: project.team_id || '',
+      project_manager_id: project.project_manager_id || ''
     });
     setDialogOpen(true);
   };
@@ -186,7 +182,8 @@ export const AdminProjects = () => {
       department: '',
       start_date: '',
       end_date: '',
-      team_id: ''
+      team_id: '',
+      project_manager_id: ''
     });
   };
 
@@ -201,12 +198,12 @@ export const AdminProjects = () => {
   };
 
   // Check if user has permission to manage projects
-  if (!isAdmin && !isProjectAdmin) {
+  if (!canCreateProject() && !isAdmin) {
     return (
       <div className="space-y-6">
         <Card>
           <CardContent className="p-6">
-            <p className="text-muted-foreground">You don't have permission to manage projects.</p>
+            <p className="text-muted-foreground">You don't have permission to create projects. Only admins can create projects and assign project administrators.</p>
           </CardContent>
         </Card>
       </div>
@@ -226,121 +223,138 @@ export const AdminProjects = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Project Management</h2>
-          <p className="text-gray-600">Manage projects and their details</p>
+          <p className="text-gray-600">Create projects and assign project administrators</p>
         </div>
-        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-          <DialogTrigger asChild>
-            <Button onClick={resetForm}>
-              <Plus className="mr-2 h-4 w-4" />
-              Add Project
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-2xl">
-            <DialogHeader>
-              <DialogTitle>
-                {editingProject ? 'Edit Project' : 'Create New Project'}
-              </DialogTitle>
-              <DialogDescription>
-                {editingProject ? 'Update project details' : 'Add a new project to the system'}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="grid gap-4 py-4">
-              <div className="grid gap-2">
-                <Label htmlFor="name">Project Name</Label>
-                <Input
-                  id="name"
-                  value={projectData.name}
-                  onChange={(e) => setProjectData({ ...projectData, name: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={projectData.description}
-                  onChange={(e) => setProjectData({ ...projectData, description: e.target.value })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
+        {canCreateProject() && (
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button onClick={resetForm}>
+                <Plus className="mr-2 h-4 w-4" />
+                Add Project
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="max-w-2xl">
+              <DialogHeader>
+                <DialogTitle>
+                  {editingProject ? 'Edit Project' : 'Create New Project'}
+                </DialogTitle>
+                <DialogDescription>
+                  {editingProject ? 'Update project details' : 'Create a new project and assign a project administrator'}
+                </DialogDescription>
+              </DialogHeader>
+              <div className="grid gap-4 py-4">
                 <div className="grid gap-2">
-                  <Label htmlFor="status">Status</Label>
-                  <Select value={projectData.status} onValueChange={(value) => setProjectData({ ...projectData, status: value })}>
+                  <Label htmlFor="name">Project Name</Label>
+                  <Input
+                    id="name"
+                    value={projectData.name}
+                    onChange={(e) => setProjectData({ ...projectData, name: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="description">Description</Label>
+                  <Textarea
+                    id="description"
+                    value={projectData.description}
+                    onChange={(e) => setProjectData({ ...projectData, description: e.target.value })}
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="status">Status</Label>
+                    <Select value={projectData.status} onValueChange={(value) => setProjectData({ ...projectData, status: value })}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="planning">Planning</SelectItem>
+                        <SelectItem value="active">Active</SelectItem>
+                        <SelectItem value="on-hold">On Hold</SelectItem>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="department">Department</Label>
+                    <Input
+                      id="department"
+                      value={projectData.department}
+                      onChange={(e) => setProjectData({ ...projectData, department: e.target.value })}
+                    />
+                  </div>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="team_id">Business Unit</Label>
+                  <Select value={projectData.team_id} onValueChange={(value) => setProjectData({ ...projectData, team_id: value })}>
                     <SelectTrigger>
-                      <SelectValue />
+                      <SelectValue placeholder="Select business unit" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="planning">Planning</SelectItem>
-                      <SelectItem value="active">Active</SelectItem>
-                      <SelectItem value="on-hold">On Hold</SelectItem>
-                      <SelectItem value="completed">Completed</SelectItem>
-                      <SelectItem value="cancelled">Cancelled</SelectItem>
+                      {businessUnits.map((unit) => (
+                        <SelectItem key={unit.id} value={unit.id}>
+                          {unit.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="department">Department</Label>
+                  <Label htmlFor="total_budget">Total Budget</Label>
                   <Input
-                    id="department"
-                    value={projectData.department}
-                    onChange={(e) => setProjectData({ ...projectData, department: e.target.value })}
+                    id="total_budget"
+                    type="number"
+                    value={projectData.total_budget}
+                    onChange={(e) => setProjectData({ ...projectData, total_budget: Number(e.target.value) })}
                   />
                 </div>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="team_id">Business Unit</Label>
-                <Select value={projectData.team_id} onValueChange={(value) => setProjectData({ ...projectData, team_id: value })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select business unit" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {businessUnits.map((unit) => (
-                      <SelectItem key={unit.id} value={unit.id}>
-                        {unit.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="total_budget">Total Budget</Label>
-                <Input
-                  id="total_budget"
-                  type="number"
-                  value={projectData.total_budget}
-                  onChange={(e) => setProjectData({ ...projectData, total_budget: Number(e.target.value) })}
-                />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="start_date">Start Date</Label>
-                  <Input
-                    id="start_date"
-                    type="date"
-                    value={projectData.start_date}
-                    onChange={(e) => setProjectData({ ...projectData, start_date: e.target.value })}
-                  />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="grid gap-2">
+                    <Label htmlFor="start_date">Start Date</Label>
+                    <Input
+                      id="start_date"
+                      type="date"
+                      value={projectData.start_date}
+                      onChange={(e) => setProjectData({ ...projectData, start_date: e.target.value })}
+                    />
+                  </div>
+                  <div className="grid gap-2">
+                    <Label htmlFor="end_date">End Date</Label>
+                    <Input
+                      id="end_date"
+                      type="date"
+                      value={projectData.end_date}
+                      onChange={(e) => setProjectData({ ...projectData, end_date: e.target.value })}
+                    />
+                  </div>
                 </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="end_date">End Date</Label>
-                  <Input
-                    id="end_date"
-                    type="date"
-                    value={projectData.end_date}
-                    onChange={(e) => setProjectData({ ...projectData, end_date: e.target.value })}
-                  />
+                  <Label htmlFor="project_manager_id">Project Administrator</Label>
+                  <Select value={projectData.project_manager_id} onValueChange={(value) => setProjectData({ ...projectData, project_manager_id: value })}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select project administrator" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {projectAdmins.map((admin) => (
+                        <SelectItem key={admin.id} value={admin.id}>
+                          {admin.full_name} ({admin.role})
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                 </div>
               </div>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                Cancel
-              </Button>
-              <Button onClick={saveProject}>
-                {editingProject ? 'Update' : 'Create'} Project
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        </Dialog>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button onClick={saveProject}>
+                  {editingProject ? 'Update' : 'Create'} Project
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        )}
       </div>
 
       <Card>

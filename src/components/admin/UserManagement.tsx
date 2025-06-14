@@ -1,5 +1,6 @@
+
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiService } from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,9 +12,11 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Edit, UserCog } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useRole } from '@/hooks/useRole';
 
 interface User {
   id: string;
+  email: string;
   full_name: string | null;
   department: string | null;
   role: string;
@@ -35,47 +38,23 @@ export const UserManagement = () => {
   });
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
+  const { canManageUsers, isAdmin } = useRole();
 
   useEffect(() => {
-    fetchUsers();
-  }, []);
+    if (canManageUsers()) {
+      fetchUsers();
+    } else {
+      setLoading(false);
+    }
+  }, [canManageUsers]);
 
   const fetchUsers = async () => {
     try {
-      // Get users from profiles table with their roles
-      const { data: profiles, error: profilesError } = await supabase
-        .from('profiles')
-        .select(`
-          id,
-          full_name,
-          department,
-          created_at
-        `);
-
-      if (profilesError) throw profilesError;
-
-      // Get user roles separately
-      const { data: userRoles, error: rolesError } = await supabase
-        .from('user_roles')
-        .select('user_id, role');
-
-      if (rolesError) throw rolesError;
-
-      // Create a map of user roles
-      const rolesMap = new Map();
-      userRoles?.forEach(ur => {
-        rolesMap.set(ur.user_id, ur.role);
-      });
-
-      const usersWithRoles = (profiles || []).map(profile => ({
-        id: profile.id,
-        full_name: profile.full_name,
-        department: profile.department,
-        role: rolesMap.get(profile.id) || 'user',
-        created_at: profile.created_at
-      }));
-
-      setUsers(usersWithRoles);
+      const response = await apiService.getUsers();
+      if (response.error) {
+        throw new Error(response.error);
+      }
+      setUsers(response.data || []);
     } catch (error) {
       console.error('Error fetching users:', error);
       toast({
@@ -90,38 +69,21 @@ export const UserManagement = () => {
 
   const createUser = async () => {
     try {
-      // Use regular signup instead of admin API
-      const { data, error } = await supabase.auth.signUp({
+      const response = await apiService.register({
         email: newUserData.email,
         password: newUserData.password,
-        options: {
-          data: {
-            full_name: newUserData.full_name,
-            department: newUserData.department
-          }
-        }
+        full_name: newUserData.full_name,
+        department: newUserData.department,
+        role: newUserData.role
       });
 
-      if (error) throw error;
-
-      // Set the user role if user was created
-      if (data.user && newUserData.role !== 'user') {
-        const { error: roleError } = await supabase
-          .from('user_roles')
-          .insert({
-            user_id: data.user.id,
-            role: newUserData.role,
-            assigned_by: currentUser?.id
-          });
-
-        if (roleError) {
-          console.error('Error setting user role:', roleError);
-        }
+      if (response.error) {
+        throw new Error(response.error);
       }
 
       toast({
         title: "Success",
-        description: "User created successfully. They will need to verify their email."
+        description: "User created successfully"
       });
 
       setDialogOpen(false);
@@ -139,15 +101,21 @@ export const UserManagement = () => {
 
   const updateUserRole = async (userId: string, newRole: AppRole) => {
     try {
-      const { error } = await supabase
-        .from('user_roles')
-        .upsert({
-          user_id: userId,
-          role: newRole,
-          assigned_by: currentUser?.id
+      // Only admins can assign admin or project_admin roles
+      if ((newRole === 'admin' || newRole === 'project_admin') && !isAdmin) {
+        toast({
+          title: "Error",
+          description: "Only admins can assign admin or project admin roles",
+          variant: "destructive"
         });
+        return;
+      }
 
-      if (error) throw error;
+      const response = await apiService.assignRole(userId, newRole);
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
 
       toast({
         title: "Success",
@@ -165,6 +133,32 @@ export const UserManagement = () => {
     }
   };
 
+  const deleteUser = async (userId: string) => {
+    if (!confirm('Are you sure you want to delete this user?')) return;
+
+    try {
+      const response = await apiService.deleteUser(userId);
+      
+      if (response.error) {
+        throw new Error(response.error);
+      }
+
+      toast({
+        title: "Success",
+        description: "User deleted successfully"
+      });
+
+      fetchUsers();
+    } catch (error: any) {
+      console.error('Error deleting user:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete user",
+        variant: "destructive"
+      });
+    }
+  };
+
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'admin': return 'bg-red-100 text-red-800';
@@ -174,6 +168,19 @@ export const UserManagement = () => {
       default: return 'bg-gray-100 text-gray-800';
     }
   };
+
+  // Check if user has permission to manage users
+  if (!canManageUsers()) {
+    return (
+      <div className="space-y-6">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground">You don't have permission to manage users. Only admins can create and manage users.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   if (loading) {
     return (
@@ -188,7 +195,7 @@ export const UserManagement = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
-          <p className="text-gray-600">Manage system users, roles, and permissions</p>
+          <p className="text-gray-600">Create and manage system users with role-based permissions</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
@@ -201,7 +208,7 @@ export const UserManagement = () => {
             <DialogHeader>
               <DialogTitle>Create New User</DialogTitle>
               <DialogDescription>
-                Add a new user to the system with specified role and permissions.
+                Add a new user to the system. Only admins can create users and assign roles.
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -249,8 +256,8 @@ export const UserManagement = () => {
                     <SelectItem value="user">User</SelectItem>
                     <SelectItem value="project_manager">Project Manager</SelectItem>
                     <SelectItem value="finance_manager">Finance Manager</SelectItem>
-                    <SelectItem value="project_admin">Project Admin</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
+                    {isAdmin && <SelectItem value="project_admin">Project Admin</SelectItem>}
+                    {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
                   </SelectContent>
                 </Select>
               </div>
@@ -269,13 +276,14 @@ export const UserManagement = () => {
         <CardHeader>
           <CardTitle>System Users</CardTitle>
           <CardDescription>
-            View and manage all system users, their roles, and permissions
+            Manage all system users and their role-based permissions
           </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Email</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Department</TableHead>
                 <TableHead>Role</TableHead>
@@ -286,7 +294,8 @@ export const UserManagement = () => {
             <TableBody>
               {users.map((user) => (
                 <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.full_name || 'N/A'}</TableCell>
+                  <TableCell className="font-medium">{user.email}</TableCell>
+                  <TableCell>{user.full_name || 'N/A'}</TableCell>
                   <TableCell>{user.department || 'N/A'}</TableCell>
                   <TableCell>
                     <Badge className={getRoleBadgeColor(user.role)}>
@@ -295,21 +304,32 @@ export const UserManagement = () => {
                   </TableCell>
                   <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
                   <TableCell>
-                    <Select
-                      value={user.role}
-                      onValueChange={(value: AppRole) => updateUserRole(user.id, value)}
-                    >
-                      <SelectTrigger className="w-40">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="user">User</SelectItem>
-                        <SelectItem value="project_manager">Project Manager</SelectItem>
-                        <SelectItem value="finance_manager">Finance Manager</SelectItem>
-                        <SelectItem value="project_admin">Project Admin</SelectItem>
-                        <SelectItem value="admin">Admin</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <div className="flex space-x-2">
+                      <Select
+                        value={user.role}
+                        onValueChange={(value: AppRole) => updateUserRole(user.id, value)}
+                      >
+                        <SelectTrigger className="w-40">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="user">User</SelectItem>
+                          <SelectItem value="project_manager">Project Manager</SelectItem>
+                          <SelectItem value="finance_manager">Finance Manager</SelectItem>
+                          {isAdmin && <SelectItem value="project_admin">Project Admin</SelectItem>}
+                          {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
+                        </SelectContent>
+                      </Select>
+                      {user.id !== currentUser?.id && (
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteUser(user.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

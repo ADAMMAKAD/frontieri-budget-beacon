@@ -1,6 +1,5 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 
 export const useRole = () => {
@@ -13,7 +12,12 @@ export const useRole = () => {
 
   useEffect(() => {
     if (user) {
-      fetchUserRole();
+      setUserRole(user.role);
+      setIsAdmin(user.role === 'admin');
+      setIsProjectAdmin(user.role === 'project_admin' || user.role === 'admin');
+      // Note: team_id would come from user profile in your backend
+      setUserTeamId(user.team_id || null);
+      setLoading(false);
     } else {
       setUserRole(null);
       setIsAdmin(false);
@@ -22,54 +26,6 @@ export const useRole = () => {
       setLoading(false);
     }
   }, [user]);
-
-  const fetchUserRole = async () => {
-    try {
-      // Fetch user role and team info
-      const [roleResult, profileResult] = await Promise.all([
-        supabase
-          .from('user_roles')
-          .select('role')
-          .eq('user_id', user?.id)
-          .maybeSingle(),
-        supabase
-          .from('profiles')
-          .select('team_id')
-          .eq('id', user?.id)
-          .maybeSingle()
-      ]);
-
-      if (roleResult.error && roleResult.error.code !== 'PGRST116') {
-        console.error('Error fetching user role:', roleResult.error);
-        setUserRole('user');
-        setIsAdmin(false);
-        setIsProjectAdmin(false);
-      } else if (roleResult.data) {
-        setUserRole(roleResult.data.role);
-        setIsAdmin(roleResult.data.role === 'admin');
-        setIsProjectAdmin(roleResult.data.role === 'project_admin' || roleResult.data.role === 'admin');
-      } else {
-        setUserRole('user');
-        setIsAdmin(false);
-        setIsProjectAdmin(false);
-      }
-
-      if (profileResult.error) {
-        console.error('Error fetching user profile:', profileResult.error);
-        setUserTeamId(null);
-      } else if (profileResult.data) {
-        setUserTeamId(profileResult.data.team_id);
-      }
-    } catch (error) {
-      console.error('Error in fetchUserRole:', error);
-      setUserRole('user');
-      setIsAdmin(false);
-      setIsProjectAdmin(false);
-      setUserTeamId(null);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const hasRole = (role: string) => {
     return userRole === role || isAdmin;
@@ -82,6 +38,30 @@ export const useRole = () => {
     return false;
   };
 
+  const canCreateProject = () => {
+    return isAdmin;
+  };
+
+  const canManageUsers = () => {
+    return isAdmin;
+  };
+
+  const canAssignProjectAdmin = () => {
+    return isAdmin;
+  };
+
+  const canManageProjectBudget = (projectManagerId?: string | null) => {
+    if (isAdmin) return true;
+    if (isProjectAdmin && projectManagerId === user?.id) return true;
+    return false;
+  };
+
+  const canApproveExpenses = (projectManagerId?: string | null) => {
+    if (isAdmin) return true;
+    if (isProjectAdmin && projectManagerId === user?.id) return true;
+    return false;
+  };
+
   return {
     userRole,
     isAdmin,
@@ -90,6 +70,11 @@ export const useRole = () => {
     loading,
     hasRole,
     canAccessProject,
-    refetch: fetchUserRole
+    canCreateProject,
+    canManageUsers,
+    canAssignProjectAdmin,
+    canManageProjectBudget,
+    canApproveExpenses,
+    refetch: () => {} // Will be handled by auth context
   };
 };
