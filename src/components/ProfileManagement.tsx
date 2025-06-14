@@ -58,8 +58,8 @@ const ProfileManagement = () => {
         // Create profile if it doesn't exist
         const newProfile: Profile = {
           id: user?.id || '',
-          full_name: user?.user_metadata?.full_name || '',
-          department: user?.user_metadata?.department || '',
+          full_name: user?.user_metadata?.full_name || user?.full_name || '',
+          department: user?.user_metadata?.department || user?.department || '',
           role: userRole || 'user'
         };
         

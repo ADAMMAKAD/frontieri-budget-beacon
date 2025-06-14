@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { apiService } from '@/services/api';
 
@@ -8,6 +7,11 @@ interface User {
   full_name: string;
   department: string;
   role: string;
+  team_id?: string;
+  user_metadata?: {
+    full_name?: string;
+    department?: string;
+  };
 }
 
 interface AuthContextType {
