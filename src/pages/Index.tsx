@@ -5,7 +5,7 @@ import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { OverviewDashboard } from "@/components/OverviewDashboard";
-import BudgetPlanning from "@/components/BudgetPlanning";
+import { BudgetPlanning } from "@/components/BudgetPlanning";
 import BudgetAllocation from "@/components/BudgetAllocation";
 import BudgetTracking from "@/components/BudgetTracking";
 import Reporting from "@/components/Reporting";

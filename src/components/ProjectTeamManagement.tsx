@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -77,10 +76,24 @@ const ProjectTeamManagement = () => {
 
       if (teamsError) throw teamsError;
 
-      // Fetch ALL projects for the dropdown (not filtered by access)
+      // Fetch ALL projects with complete data for the dropdown
       const { data: allProjectsData, error: allProjectsError } = await supabase
         .from('projects')
-        .select('*')
+        .select(`
+          id,
+          name,
+          description,
+          status,
+          total_budget,
+          spent_budget,
+          allocated_budget,
+          start_date,
+          end_date,
+          department,
+          team_id,
+          project_manager_id,
+          created_at
+        `)
         .order('name');
 
       if (allProjectsError) throw allProjectsError;
@@ -88,7 +101,21 @@ const ProjectTeamManagement = () => {
       // Fetch project names separately for access-controlled view
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
-        .select('id, name, team_id, project_manager_id')
+        .select(`
+          id,
+          name,
+          description,
+          status,
+          total_budget,
+          spent_budget,
+          allocated_budget,
+          start_date,
+          end_date,
+          department,
+          team_id,
+          project_manager_id,
+          created_at
+        `)
         .order('name');
 
       if (projectsError) throw projectsError;
