@@ -1,241 +1,150 @@
 
-import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import React, { useState, useEffect } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Settings, Loader2 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
-import { useRole } from '@/hooks/useRole';
-import { User, Mail, Building, Edit, Save, X } from 'lucide-react';
-
-interface Profile {
-  id: string;
-  full_name: string;
-  department: string;
-  role: string;
-}
+import { supabase } from '@/integrations/supabase/client';
 
 const ProfileManagement = () => {
-  const [profile, setProfile] = useState<Profile | null>(null);
-  const [isEditing, setIsEditing] = useState(false);
-  const [editedProfile, setEditedProfile] = useState<Partial<Profile>>({});
-  const [loading, setLoading] = useState(true);
-  const { toast } = useToast();
   const { user } = useAuth();
-  const { userRole, isAdmin, loading: roleLoading } = useRole();
+  const [isEditing, setIsEditing] = useState(false);
+  const [formData, setFormData] = useState({
+    full_name: user?.profile?.full_name || '',
+    department: user?.profile?.department || '',
+    email: user?.email || ''
+  });
+  const [loading, setLoading] = useState(false);
+  const { toast } = useToast();
 
   useEffect(() => {
     if (user) {
-      fetchProfile();
+      setFormData({
+        full_name: user.profile?.full_name || '',
+        department: user.profile?.department || '',
+        email: user.email || ''
+      });
     }
   }, [user]);
 
-  const fetchProfile = async () => {
+  const handleSave = async () => {
+    setLoading(true);
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
-        .eq('id', user?.id)
-        .single();
+        .update({
+          full_name: formData.full_name,
+          department: formData.department,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', user?.id);
 
-      if (error && error.code !== 'PGRST116') {
-        throw error;
-      }
-
-      if (data) {
-        // Ensure all required fields are present
-        const profileData: Profile = {
-          id: data.id,
-          full_name: data.full_name || '',
-          department: data.department || '',
-          role: userRole || 'user'
-        };
-        setProfile(profileData);
-        setEditedProfile(profileData);
+      if (error) {
+        toast({
+          title: "Failed to update profile",
+          description: error.message,
+          variant: "destructive"
+        });
       } else {
-        // Create profile if it doesn't exist
-        const newProfile: Profile = {
-          id: user?.id || '',
-          full_name: user?.user_metadata?.full_name || user?.full_name || '',
-          department: user?.user_metadata?.department || user?.department || '',
-          role: userRole || 'user'
-        };
-        
-        const { error: insertError } = await supabase
-          .from('profiles')
-          .insert([newProfile]);
-
-        if (insertError) throw insertError;
-        
-        setProfile(newProfile);
-        setEditedProfile(newProfile);
+        toast({
+          title: "Profile updated",
+          description: "Your profile has been updated successfully."
+        });
+        // Force refresh the page to update the user context
+        window.location.reload();
       }
-    } catch (error) {
-      console.error('Error fetching profile:', error);
+    } catch (error: any) {
       toast({
-        title: "Error",
-        description: "Failed to load profile",
+        title: "Failed to update profile",
+        description: error.message,
         variant: "destructive"
       });
     } finally {
       setLoading(false);
-    }
-  };
-
-  const updateProfile = async () => {
-    try {
-      const { error } = await supabase
-        .from('profiles')
-        .update(editedProfile)
-        .eq('id', user?.id);
-
-      if (error) throw error;
-
-      setProfile({ ...profile, ...editedProfile } as Profile);
       setIsEditing(false);
-      
-      toast({
-        title: "Success",
-        description: "Profile updated successfully"
-      });
-    } catch (error) {
-      console.error('Error updating profile:', error);
-      toast({
-        title: "Error",
-        description: "Failed to update profile",
-        variant: "destructive"
-      });
     }
   };
 
-  if (loading || roleLoading) {
+  if (!user) {
     return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      <div className="p-6">
+        <p>Please log in to view your profile.</p>
       </div>
     );
   }
 
   return (
-    <div className="p-6 space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
+    <div className="p-6 max-w-2xl mx-auto">
+      <div className="bg-white rounded-lg shadow-sm border p-6">
+        <div className="flex items-center justify-between mb-6">
           <h2 className="text-2xl font-bold text-gray-900">Profile Management</h2>
-          <p className="text-gray-600 mt-1">Manage your personal information</p>
-        </div>
-        {!isEditing ? (
-          <Button 
-            onClick={() => setIsEditing(true)}
-            className="bg-gradient-to-r from-blue-600 to-purple-600"
+          <Button
+            onClick={() => setIsEditing(!isEditing)}
+            variant={isEditing ? "outline" : "default"}
+            className={!isEditing ? "bg-gradient-to-r from-orange-500 to-orange-600" : ""}
           >
-            <Edit className="mr-2 h-4 w-4" />
-            Edit Profile
+            <Settings className="h-4 w-4 mr-2" />
+            {isEditing ? "Cancel" : "Edit Profile"}
           </Button>
-        ) : (
-          <div className="space-x-2">
-            <Button onClick={updateProfile} size="sm">
-              <Save className="mr-2 h-4 w-4" />
-              Save
-            </Button>
-            <Button 
-              variant="outline" 
-              onClick={() => {
-                setIsEditing(false);
-                setEditedProfile(profile || {});
-              }}
-              size="sm"
-            >
-              <X className="mr-2 h-4 w-4" />
-              Cancel
-            </Button>
-          </div>
-        )}
-      </div>
+        </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2">
-            <User className="h-5 w-5" />
-            <span>Personal Information</span>
-          </CardTitle>
-          <CardDescription>Your account details and contact information</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
+        <div className="space-y-6">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
-              <div className="flex items-center space-x-2">
-                <Mail className="h-4 w-4 text-gray-400" />
+            <div>
+              <Label htmlFor="full_name">Full Name</Label>
+              {isEditing ? (
                 <Input
-                  id="email"
-                  value={user?.email || ''}
-                  disabled
-                  className="bg-gray-50"
+                  id="full_name"
+                  value={formData.full_name}
+                  onChange={(e) => setFormData(prev => ({ ...prev, full_name: e.target.value }))}
+                  placeholder="Enter your full name"
                 />
-              </div>
-            </div>
-            
-            <div className="space-y-2">
-              <Label htmlFor="fullName">Full Name</Label>
-              <Input
-                id="fullName"
-                value={isEditing ? (editedProfile.full_name || '') : (profile?.full_name || '')}
-                onChange={(e) => isEditing && setEditedProfile(prev => ({ ...prev, full_name: e.target.value }))}
-                disabled={!isEditing}
-                className={!isEditing ? "bg-gray-50" : ""}
-              />
+              ) : (
+                <p className="mt-1 text-sm text-gray-600">{user.profile?.full_name || 'Not provided'}</p>
+              )}
             </div>
 
-            <div className="space-y-2">
+            <div>
               <Label htmlFor="department">Department</Label>
-              <div className="flex items-center space-x-2">
-                <Building className="h-4 w-4 text-gray-400" />
+              {isEditing ? (
                 <Input
                   id="department"
-                  value={isEditing ? (editedProfile.department || '') : (profile?.department || '')}
-                  onChange={(e) => isEditing && setEditedProfile(prev => ({ ...prev, department: e.target.value }))}
-                  disabled={!isEditing}
-                  className={!isEditing ? "bg-gray-50" : ""}
+                  value={formData.department}
+                  onChange={(e) => setFormData(prev => ({ ...prev, department: e.target.value }))}
+                  placeholder="Enter your department"
                 />
-              </div>
+              ) : (
+                <p className="mt-1 text-sm text-gray-600">{user.profile?.department || 'Not provided'}</p>
+              )}
             </div>
 
-            <div className="space-y-2">
+            <div>
+              <Label htmlFor="email">Email</Label>
+              <p className="mt-1 text-sm text-gray-600">{user.email}</p>
+            </div>
+
+            <div>
               <Label htmlFor="role">Role</Label>
-              <Input
-                id="role"
-                value={userRole || 'user'}
-                disabled
-                className="bg-gray-50"
-              />
+              <p className="mt-1 text-sm text-gray-600">{user.profile?.role || 'User'}</p>
             </div>
           </div>
-        </CardContent>
-      </Card>
 
-      {/* Admin-only section */}
-      {isAdmin && (
-        <Card className="border-red-200">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2 text-red-700">
-              <User className="h-5 w-5" />
-              <span>Administrator Information</span>
-            </CardTitle>
-            <CardDescription>Additional information for admin users</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-red-50 p-4 rounded-lg">
-              <p className="text-red-800 font-medium">Administrator Access</p>
-              <p className="text-red-600 text-sm mt-1">
-                You have administrator privileges which grant access to user management, 
-                system settings, and advanced features.
-              </p>
+          {isEditing && (
+            <div className="flex space-x-4">
+              <Button
+                onClick={handleSave}
+                className="bg-gradient-to-r from-orange-500 to-orange-600"
+                disabled={loading}
+              >
+                {loading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                Save Changes
+              </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
+        </div>
+      </div>
     </div>
   );
 };
