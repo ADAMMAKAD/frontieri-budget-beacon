@@ -88,13 +88,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
+      console.log('Attempting to sign in with:', { email });
       const response = await apiService.login(email, password);
       
+      console.log('Sign in response:', response);
+      
       if (response.error) {
+        console.log('Sign in error from API:', response.error);
         return { error: { message: response.error } };
       }
 
-      if (response.data && response.data.user) {
+      // Check if we have a successful response with data
+      if (response.data?.user && response.data?.token) {
+        console.log('Setting token and user data...');
         apiService.setToken(response.data.token);
         
         // Transform the response data to match our User interface
@@ -112,10 +118,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           }
         };
         
+        console.log('Transformed user data:', userData);
         setUser(userData);
         console.log('User signed in successfully:', userData);
         return { error: null };
       } else {
+        console.log('Invalid response structure:', response);
         return { error: { message: 'Invalid response from server' } };
       }
     } catch (error) {
