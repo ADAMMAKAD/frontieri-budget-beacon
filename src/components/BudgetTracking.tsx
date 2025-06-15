@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -208,7 +207,7 @@ const BudgetTracking = () => {
         </div>
         <Button 
           onClick={() => setIsCreating(true)}
-          className="bg-gradient-to-r from-blue-600 to-purple-600"
+          className="bg-orange-600 hover:bg-orange-700"
           disabled={!selectedProject}
         >
           <Plus className="mr-2 h-4 w-4" />
@@ -323,7 +322,7 @@ const BudgetTracking = () => {
                 </div>
               </div>
               <div className="flex space-x-2">
-                <Button type="submit" className="bg-gradient-to-r from-blue-600 to-purple-600">
+                <Button type="submit" className="bg-orange-600 hover:bg-orange-700">
                   Record Expense
                 </Button>
                 <Button type="button" variant="outline" onClick={() => setIsCreating(false)}>
@@ -378,7 +377,7 @@ const BudgetTracking = () => {
           <p className="text-gray-600 mb-4">Start tracking expenses for this project</p>
           <Button 
             onClick={() => setIsCreating(true)}
-            className="bg-gradient-to-r from-blue-600 to-purple-600"
+            className="bg-orange-600 hover:bg-orange-700"
           >
             <Plus className="mr-2 h-4 w-4" />
             Add Expense

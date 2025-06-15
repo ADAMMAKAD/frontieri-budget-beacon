@@ -31,31 +31,56 @@ const Index = () => {
 
   useEffect(() => {
     if (!loading && !user) {
+      console.log('No user found, redirecting to auth');
       navigate('/auth');
     }
   }, [user, loading, navigate]);
 
-  // Redirect non-admin users away from admin section
   useEffect(() => {
     if (!roleLoading && activeSection === "admin" && !isAdmin) {
       setActiveSection("overview");
     }
   }, [activeSection, isAdmin, roleLoading]);
 
-  if (loading || roleLoading) {
+  // Show loading while auth is initializing
+  if (loading) {
+    console.log('Auth loading...');
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Loading application...</p>
         </div>
       </div>
     );
   }
 
-  if (!user) {
-    return null;
+  // Show loading while role is loading
+  if (roleLoading) {
+    console.log('Role loading...');
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mx-auto"></div>
+          <p className="mt-2 text-gray-600">Setting up your dashboard...</p>
+        </div>
+      </div>
+    );
   }
+
+  // Redirect to auth if no user
+  if (!user) {
+    console.log('User not authenticated, should redirect to auth');
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">Redirecting to authentication...</p>
+        </div>
+      </div>
+    );
+  }
+
+  console.log('Rendering main app for user:', user.email);
 
   const renderContent = () => {
     try {
@@ -89,7 +114,6 @@ const Index = () => {
         case "notifications":
           return <NotificationCenter />;
         case "admin":
-          // Only render admin dashboard if user is admin
           return isAdmin ? <AdminDashboard /> : <OverviewDashboard />;
         default:
           return <OverviewDashboard />;

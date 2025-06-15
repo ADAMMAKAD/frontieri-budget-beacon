@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -37,7 +38,7 @@ export const BudgetPlanning = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<BudgetCategory[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>('');
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [thresholdDialogOpen, setThresholdDialogOpen] = useState(false);
   const [categoryData, setCategoryData] = useState({
@@ -54,21 +55,13 @@ export const BudgetPlanning = () => {
   const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    if (!authLoading) {
-      if (!user) {
-        console.log('No user found, authentication required');
-        setLoading(false);
-        return;
-      }
+    if (!authLoading && user) {
       fetchData();
     }
   }, [user, authLoading]);
 
   const fetchData = async () => {
-    if (!user) {
-      console.error('No user found');
-      return;
-    }
+    if (!user) return;
 
     try {
       setLoading(true);
@@ -85,9 +78,9 @@ export const BudgetPlanning = () => {
           description: "Failed to load projects",
           variant: "destructive"
         });
-        setProjects([]);
       } else {
-        setProjects(projectsResult.data || []);
+        const validProjects = (projectsResult.data || []).filter(p => p.id && p.id.trim() !== '');
+        setProjects(validProjects);
       }
 
       if (categoriesResult.error) {
@@ -97,7 +90,6 @@ export const BudgetPlanning = () => {
           description: "Failed to load categories",
           variant: "destructive"
         });
-        setCategories([]);
       } else {
         setCategories(categoriesResult.data || []);
       }
@@ -108,8 +100,6 @@ export const BudgetPlanning = () => {
         description: "Failed to load budget data",
         variant: "destructive"
       });
-      setProjects([]);
-      setCategories([]);
     } finally {
       setLoading(false);
     }
@@ -125,10 +115,24 @@ export const BudgetPlanning = () => {
       return;
     }
 
+    if (!categoryData.name || !categoryData.project_id || categoryData.allocated_amount <= 0) {
+      toast({
+        title: "Error",
+        description: "Please fill all fields with valid data",
+        variant: "destructive"
+      });
+      return;
+    }
+
     try {
       const { error } = await supabase
         .from('budget_categories')
-        .insert([categoryData]);
+        .insert([{
+          name: categoryData.name,
+          allocated_amount: categoryData.allocated_amount,
+          project_id: categoryData.project_id,
+          spent_amount: 0
+        }]);
 
       if (error) throw error;
 
@@ -158,7 +162,6 @@ export const BudgetPlanning = () => {
     return projects.find(p => p.id === selectedProject);
   };
 
-  // Show loading if auth is still loading
   if (authLoading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -167,7 +170,6 @@ export const BudgetPlanning = () => {
     );
   }
 
-  // Show error if no user
   if (!user) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -178,17 +180,6 @@ export const BudgetPlanning = () => {
       </div>
     );
   }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
-      </div>
-    );
-  }
-
-  // Filter projects to ensure no empty IDs
-  const validProjects = projects.filter(project => project.id && project.id.trim() !== '');
 
   return (
     <div className="p-6 space-y-6">
@@ -275,7 +266,7 @@ export const BudgetPlanning = () => {
                       <SelectValue placeholder="Select project" />
                     </SelectTrigger>
                     <SelectContent>
-                      {validProjects.map((project) => (
+                      {projects.map((project) => (
                         <SelectItem key={project.id} value={project.id}>
                           {project.name}
                         </SelectItem>
@@ -329,7 +320,7 @@ export const BudgetPlanning = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="">All Projects</SelectItem>
-              {validProjects.map((project) => (
+              {projects.map((project) => (
                 <SelectItem key={project.id} value={project.id}>
                   {project.name}
                 </SelectItem>
@@ -402,7 +393,11 @@ export const BudgetPlanning = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {filteredCategories.length === 0 ? (
+          {loading ? (
+            <div className="flex items-center justify-center p-8">
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
+            </div>
+          ) : filteredCategories.length === 0 ? (
             <div className="text-center p-8 text-muted-foreground">
               <p>No budget categories found.</p>
               <p className="text-sm">Create your first category to get started.</p>
