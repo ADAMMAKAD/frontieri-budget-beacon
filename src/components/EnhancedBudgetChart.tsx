@@ -1,4 +1,3 @@
-
 import React, { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -114,7 +113,7 @@ export const EnhancedBudgetChart: React.FC = () => {
                 <YAxis className="stroke-muted-foreground" tickFormatter={formatYAxisTick} />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend />
-                <Bar dataKey="planned" fill="hsl(var(--muted))" name="Planned Budget" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="planned" fill="#3B82F6" name="Planned Budget" radius={[4, 4, 0, 0]} />
                 <Bar dataKey="actual" fill="#DC2626" name="Actual Spend" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>

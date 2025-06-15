@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -55,7 +54,12 @@ export const BudgetPlanning = () => {
   const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    if (!authLoading && user) {
+    if (!authLoading) {
+      if (!user) {
+        console.log('No user found, authentication required');
+        setLoading(false);
+        return;
+      }
       fetchData();
     }
   }, [user, authLoading]);
@@ -76,15 +80,27 @@ export const BudgetPlanning = () => {
 
       if (projectsResult.error) {
         console.error('Projects error:', projectsResult.error);
-        throw projectsResult.error;
-      }
-      if (categoriesResult.error) {
-        console.error('Categories error:', categoriesResult.error);
-        throw categoriesResult.error;
+        toast({
+          title: "Error",
+          description: "Failed to load projects",
+          variant: "destructive"
+        });
+        setProjects([]);
+      } else {
+        setProjects(projectsResult.data || []);
       }
 
-      setProjects(projectsResult.data || []);
-      setCategories(categoriesResult.data || []);
+      if (categoriesResult.error) {
+        console.error('Categories error:', categoriesResult.error);
+        toast({
+          title: "Error",
+          description: "Failed to load categories",
+          variant: "destructive"
+        });
+        setCategories([]);
+      } else {
+        setCategories(categoriesResult.data || []);
+      }
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -92,6 +108,8 @@ export const BudgetPlanning = () => {
         description: "Failed to load budget data",
         variant: "destructive"
       });
+      setProjects([]);
+      setCategories([]);
     } finally {
       setLoading(false);
     }
@@ -254,7 +272,7 @@ export const BudgetPlanning = () => {
                       <SelectValue placeholder="Select project" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projects.map((project) => (
+                      {projects.filter(project => project.id && project.id.trim() !== '').map((project) => (
                         <SelectItem key={project.id} value={project.id}>
                           {project.name}
                         </SelectItem>
@@ -308,7 +326,7 @@ export const BudgetPlanning = () => {
             </SelectTrigger>
             <SelectContent>
               <SelectItem value="">All Projects</SelectItem>
-              {projects.map((project) => (
+              {projects.filter(project => project.id && project.id.trim() !== '').map((project) => (
                 <SelectItem key={project.id} value={project.id}>
                   {project.name}
                 </SelectItem>
