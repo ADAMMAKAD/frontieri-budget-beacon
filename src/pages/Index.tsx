@@ -55,19 +55,6 @@ const Index = () => {
     );
   }
 
-  // Show loading while role is loading
-  if (roleLoading) {
-    console.log('Role loading...');
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Setting up your dashboard...</p>
-        </div>
-      </div>
-    );
-  }
-
   // Redirect to auth if no user
   if (!user) {
     console.log('User not authenticated, should redirect to auth');
