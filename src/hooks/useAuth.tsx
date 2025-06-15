@@ -98,9 +98,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return { error: { message: response.error } };
       }
 
-      // Adjusted: Unwrap the actual user+token from response.data.data
-      const rawUserData = response.data?.data?.user;
-      const rawToken = response.data?.data?.token;
+      // Corrected: Unwrap the actual user+token directly from response.data
+      const rawUserData = response.data?.user;
+      const rawToken = response.data?.token;
 
       if (rawUserData && rawToken) {
         console.log('Setting token and user data...');
