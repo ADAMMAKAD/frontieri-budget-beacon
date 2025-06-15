@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { apiService } from '@/services/api';
 
@@ -39,7 +40,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         apiService.setToken(token);
         const response = await apiService.getCurrentUser();
         if (response.data) {
-          setUser(response.data);
+          // Transform the response data to match our User interface
+          const userData = {
+            id: response.data.id,
+            email: response.data.email,
+            full_name: response.data.firstName + ' ' + response.data.lastName,
+            department: response.data.team?.name || 'Unknown',
+            role: response.data.role.toLowerCase(),
+            team_id: response.data.team?.id,
+            user_metadata: {
+              full_name: response.data.firstName + ' ' + response.data.lastName,
+              department: response.data.team?.name || 'Unknown'
+            }
+          };
+          setUser(userData);
         } else {
           apiService.clearToken();
         }
@@ -82,7 +96,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (response.data) {
         apiService.setToken(response.data.token);
-        setUser(response.data.user);
+        
+        // Transform the response data to match our User interface
+        const userData = {
+          id: response.data.user.id,
+          email: response.data.user.email,
+          full_name: response.data.user.firstName + ' ' + response.data.user.lastName,
+          department: response.data.user.team?.name || 'Unknown',
+          role: response.data.user.role.toLowerCase(),
+          team_id: response.data.user.team?.id,
+          user_metadata: {
+            full_name: response.data.user.firstName + ' ' + response.data.user.lastName,
+            department: response.data.user.team?.name || 'Unknown'
+          }
+        };
+        
+        setUser(userData);
+        console.log('User signed in successfully:', userData);
       }
 
       return { error: null };
