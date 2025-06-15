@@ -1,5 +1,6 @@
 
 import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,7 +9,6 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { useRole } from '@/hooks/useRole';
 import { User, Mail, Building, Edit, Save, X } from 'lucide-react';
-import { apiService } from '@/services/api';
 
 interface Profile {
   id: string;
@@ -34,20 +34,23 @@ const ProfileManagement = () => {
 
   const fetchProfile = async () => {
     try {
-      if (!user?.id) return;
-      
-      const response = await apiService.getUserById(user.id);
-      
-      if (response.error) {
-        throw new Error(response.error);
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', user?.id)
+        .single();
+
+      if (error && error.code !== 'PGRST116') {
+        throw error;
       }
 
-      if (response.data) {
+      if (data) {
+        // Ensure all required fields are present
         const profileData: Profile = {
-          id: response.data.id,
-          full_name: response.data.full_name || '',
-          department: response.data.department || '',
-          role: response.data.role || 'user'
+          id: data.id,
+          full_name: data.full_name || '',
+          department: data.department || '',
+          role: userRole || 'user'
         };
         setProfile(profileData);
         setEditedProfile(profileData);
@@ -55,10 +58,16 @@ const ProfileManagement = () => {
         // Create profile if it doesn't exist
         const newProfile: Profile = {
           id: user?.id || '',
-          full_name: user?.full_name || '',
-          department: user?.department || '',
+          full_name: user?.user_metadata?.full_name || user?.full_name || '',
+          department: user?.user_metadata?.department || user?.department || '',
           role: userRole || 'user'
         };
+        
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert([newProfile]);
+
+        if (insertError) throw insertError;
         
         setProfile(newProfile);
         setEditedProfile(newProfile);
@@ -77,13 +86,12 @@ const ProfileManagement = () => {
 
   const updateProfile = async () => {
     try {
-      if (!user?.id) return;
+      const { error } = await supabase
+        .from('profiles')
+        .update(editedProfile)
+        .eq('id', user?.id);
 
-      const response = await apiService.updateUser(user.id, editedProfile);
-
-      if (response.error) {
-        throw new Error(response.error);
-      }
+      if (error) throw error;
 
       setProfile({ ...profile, ...editedProfile } as Profile);
       setIsEditing(false);
