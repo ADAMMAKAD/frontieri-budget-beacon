@@ -1,38 +1,80 @@
 
-import { useAuth } from './useAuth';
+import { useState, useEffect } from 'react';
+import { useAuth } from '@/hooks/useAuth';
 
 export const useRole = () => {
-  const { user, loading: authLoading } = useAuth();
-  
-  const isAdmin = user?.profile?.role === 'admin';
-  const isManager = user?.profile?.role === 'manager' || isAdmin;
-  const role = user?.profile?.role || 'user';
-  const teamId = user?.profile?.team_id || null;
-  
-  // Additional role-based permissions
-  const isProjectAdmin = isAdmin || user?.profile?.role === 'project_admin';
-  
-  // Return permission checks as functions
-  const canCreateProject = () => isAdmin || isManager;
-  const canAccessProject = (projectTeamId?: string, projectManagerId?: string) => {
-    if (isAdmin || isProjectAdmin) return true;
-    if (isManager) return true;
-    if (projectTeamId && teamId && projectTeamId === teamId) return true;
-    if (projectManagerId && user?.id === projectManagerId) return true;
+  const [userRole, setUserRole] = useState<string | null>(null);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [isProjectAdmin, setIsProjectAdmin] = useState(false);
+  const [userTeamId, setUserTeamId] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const { user } = useAuth();
+
+  useEffect(() => {
+    if (user) {
+      setUserRole(user.role);
+      setIsAdmin(user.role === 'admin');
+      setIsProjectAdmin(user.role === 'project_admin' || user.role === 'admin');
+      // Note: team_id would come from user profile in your backend
+      setUserTeamId(user.team_id || null);
+      setLoading(false);
+    } else {
+      setUserRole(null);
+      setIsAdmin(false);
+      setIsProjectAdmin(false);
+      setUserTeamId(null);
+      setLoading(false);
+    }
+  }, [user]);
+
+  const hasRole = (role: string) => {
+    return userRole === role || isAdmin;
+  };
+
+  const canAccessProject = (projectTeamId?: string | null, projectManagerId?: string | null) => {
+    if (isAdmin) return true;
+    if (projectManagerId === user?.id) return true;
+    if (userTeamId && projectTeamId === userTeamId) return true;
     return false;
   };
-  const canManageUsers = () => isAdmin;
-  
+
+  const canCreateProject = () => {
+    return isAdmin;
+  };
+
+  const canManageUsers = () => {
+    return isAdmin;
+  };
+
+  const canAssignProjectAdmin = () => {
+    return isAdmin;
+  };
+
+  const canManageProjectBudget = (projectManagerId?: string | null) => {
+    if (isAdmin) return true;
+    if (isProjectAdmin && projectManagerId === user?.id) return true;
+    return false;
+  };
+
+  const canApproveExpenses = (projectManagerId?: string | null) => {
+    if (isAdmin) return true;
+    if (isProjectAdmin && projectManagerId === user?.id) return true;
+    return false;
+  };
+
   return {
+    userRole,
     isAdmin,
-    isManager,
-    role,
-    teamId,
-    user,
-    loading: authLoading,
     isProjectAdmin,
-    canCreateProject,
+    userTeamId,
+    loading,
+    hasRole,
     canAccessProject,
-    canManageUsers
+    canCreateProject,
+    canManageUsers,
+    canAssignProjectAdmin,
+    canManageProjectBudget,
+    canApproveExpenses,
+    refetch: () => {} // Will be handled by auth context
   };
 };
