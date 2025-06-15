@@ -11,9 +11,16 @@ export const useRole = () => {
   
   // Additional role-based permissions
   const isProjectAdmin = isAdmin || user?.profile?.role === 'project_admin';
-  const canCreateProject = isAdmin || isManager;
-  const canAccessProject = isAdmin || isManager || user?.profile?.role === 'project_admin';
-  const canManageUsers = isAdmin;
+  
+  // Return functions to maintain compatibility with existing code
+  const canCreateProject = () => isAdmin || isManager;
+  const canAccessProject = (projectTeamId?: string, projectManagerId?: string) => {
+    if (isAdmin || isManager || user?.profile?.role === 'project_admin') return true;
+    if (projectTeamId && teamId === projectTeamId) return true;
+    if (projectManagerId && user?.id === projectManagerId) return true;
+    return false;
+  };
+  const canManageUsers = () => isAdmin;
   
   return {
     isAdmin,
