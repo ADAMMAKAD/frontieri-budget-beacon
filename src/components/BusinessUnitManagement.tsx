@@ -8,7 +8,7 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { Building, Plus, Edit, Trash2, Users } from 'lucide-react';
+import { Building, Plus, Edit, Trash2, Users, Search } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface BusinessUnit {
@@ -22,6 +22,8 @@ interface BusinessUnit {
 
 const BusinessUnitManagement = () => {
   const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
+  const [filteredUnits, setFilteredUnits] = useState<BusinessUnit[]>([]);
+  const [searchTerm, setSearchTerm] = useState('');
   const [isEditing, setIsEditing] = useState(false);
   const [editingUnit, setEditingUnit] = useState<BusinessUnit | null>(null);
   const [formData, setFormData] = useState({
@@ -36,6 +38,23 @@ const BusinessUnitManagement = () => {
   useEffect(() => {
     fetchBusinessUnits();
   }, []);
+
+  useEffect(() => {
+    filterUnits();
+  }, [businessUnits, searchTerm]);
+
+  const filterUnits = () => {
+    let filtered = businessUnits;
+
+    if (searchTerm) {
+      filtered = filtered.filter(unit =>
+        unit.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (unit.description && unit.description.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+    }
+
+    setFilteredUnits(filtered);
+  };
 
   const fetchBusinessUnits = async () => {
     try {
@@ -170,6 +189,17 @@ const BusinessUnitManagement = () => {
         </Button>
       </div>
 
+      {/* Search Control */}
+      <div className="relative">
+        <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+        <Input
+          placeholder="Search business units by name or description..."
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="pl-10"
+        />
+      </div>
+
       {isEditing && (
         <Card>
           <CardHeader>
@@ -232,43 +262,57 @@ const BusinessUnitManagement = () => {
           <CardDescription>Manage your organization's business units</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Created At</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {businessUnits.map((unit) => (
-                <TableRow key={unit.id}>
-                  <TableCell className="font-medium">{unit.name}</TableCell>
-                  <TableCell>{unit.description || 'No description'}</TableCell>
-                  <TableCell>{new Date(unit.created_at).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleEdit(unit)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleDelete(unit.id)}
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          {filteredUnits.length === 0 ? (
+            <div className="text-center py-12">
+              <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                <Building className="h-8 w-8 text-gray-400" />
+              </div>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {searchTerm ? 'No matching business units' : 'No business units yet'}
+              </h3>
+              <p className="text-gray-600">
+                {searchTerm ? 'Try adjusting your search criteria' : 'Create your first business unit to get started'}
+              </p>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Created At</TableHead>
+                  <TableHead>Actions</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {filteredUnits.map((unit) => (
+                  <TableRow key={unit.id}>
+                    <TableCell className="font-medium">{unit.name}</TableCell>
+                    <TableCell>{unit.description || 'No description'}</TableCell>
+                    <TableCell>{new Date(unit.created_at).toLocaleDateString()}</TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleEdit(unit)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleDelete(unit.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>
