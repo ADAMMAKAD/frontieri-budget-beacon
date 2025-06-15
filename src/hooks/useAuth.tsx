@@ -66,6 +66,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
         setUser(null);
       }
+      
+      // Always set loading to false after handling auth state change
+      if (mounted) {
+        setLoading(false);
+      }
     });
 
     initializeAuth();
