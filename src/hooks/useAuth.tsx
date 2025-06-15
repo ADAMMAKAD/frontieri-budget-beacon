@@ -70,6 +70,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchProfile = async (authUser: any) => {
     try {
+      console.log('Fetching profile for user:', authUser.id);
+      
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -80,20 +82,56 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.error('Error fetching profile:', error);
       }
 
-      setUser({
-        id: authUser.id,
-        email: authUser.email ?? '',
-        full_name: data?.full_name ?? '',
-        department: data?.department ?? '',
-        role: data?.role ?? '',
-        team_id: data?.team_id ?? '',
-      });
+      // If no profile exists, create one
+      if (!data && authUser) {
+        console.log('No profile found, creating new profile...');
+        const newProfile = {
+          id: authUser.id,
+          full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
+          department: authUser.user_metadata?.department || 'General',
+          role: authUser.email === 'admin@gmail.com' ? 'admin' : 'user'
+        };
+
+        const { error: insertError } = await supabase
+          .from('profiles')
+          .insert([newProfile])
+          .select()
+          .single();
+
+        if (insertError) {
+          console.error('Error creating profile:', insertError);
+        } else {
+          console.log('Profile created successfully');
+        }
+
+        setUser({
+          id: authUser.id,
+          email: authUser.email ?? '',
+          full_name: newProfile.full_name,
+          department: newProfile.department,
+          role: newProfile.role,
+          team_id: '',
+        });
+      } else {
+        // Profile exists, use it
+        setUser({
+          id: authUser.id,
+          email: authUser.email ?? '',
+          full_name: data?.full_name ?? authUser.email?.split('@')[0] ?? 'User',
+          department: data?.department ?? 'General',
+          role: data?.role ?? (authUser.email === 'admin@gmail.com' ? 'admin' : 'user'),
+          team_id: data?.team_id ?? '',
+        });
+      }
     } catch (error) {
       console.error('Error in fetchProfile:', error);
-      // Still set basic user info even if profile fetch fails
+      // Still set basic user info even if profile operations fail
       setUser({
         id: authUser.id,
         email: authUser.email ?? '',
+        full_name: authUser.email?.split('@')[0] ?? 'User',
+        department: 'General',
+        role: authUser.email === 'admin@gmail.com' ? 'admin' : 'user',
       });
     }
   };

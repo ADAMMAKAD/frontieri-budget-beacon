@@ -31,6 +31,7 @@ const Index = () => {
 
   useEffect(() => {
     if (!loading && !user) {
+      console.log('No user found, redirecting to auth');
       navigate('/auth');
     }
   }, [user, loading, navigate]);
@@ -43,19 +44,29 @@ const Index = () => {
   }, [activeSection, isAdmin, roleLoading]);
 
   if (loading || roleLoading) {
+    console.log('Loading state - auth loading:', loading, 'role loading:', roleLoading);
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
+          <p className="mt-2 text-gray-600">Loading application...</p>
         </div>
       </div>
     );
   }
 
   if (!user) {
-    return null;
+    console.log('User not authenticated, should redirect to auth');
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <p className="text-gray-600">Redirecting to authentication...</p>
+        </div>
+      </div>
+    );
   }
+
+  console.log('Rendering main app for user:', user.email);
 
   const renderContent = () => {
     try {
