@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -54,13 +55,20 @@ const BudgetVersioning = () => {
   });
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    fetchData();
-  }, []);
+    if (!authLoading && user) {
+      fetchData();
+    }
+  }, [user, authLoading]);
 
   const fetchData = async () => {
+    if (!user) {
+      console.error('No user found');
+      return;
+    }
+
     try {
       const [versionsResult, projectsResult] = await Promise.all([
         supabase.from('budget_versions').select('*').order('created_at', { ascending: false }),
@@ -86,6 +94,15 @@ const BudgetVersioning = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!user) {
+      toast({
+        title: "Error",
+        description: "You must be logged in to create versions",
+        variant: "destructive"
+      });
+      return;
+    }
     
     try {
       const { data: existingVersions, error: versionError } = await supabase
@@ -133,6 +150,8 @@ const BudgetVersioning = () => {
   };
 
   const handleApprove = async (id: string) => {
+    if (!user) return;
+
     try {
       const { error } = await supabase
         .from('budget_versions')
@@ -162,6 +181,8 @@ const BudgetVersioning = () => {
   };
 
   const handleReject = async (id: string) => {
+    if (!user) return;
+
     try {
       const { error } = await supabase
         .from('budget_versions')
@@ -216,10 +237,31 @@ const BudgetVersioning = () => {
     }
   };
 
+  // Show loading if auth is still loading
+  if (authLoading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
+      </div>
+    );
+  }
+
+  // Show error if no user
+  if (!user) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="text-center">
+          <h2 className="text-xl font-semibold text-gray-900 mb-2">Authentication Required</h2>
+          <p className="text-gray-600">Please log in to access budget versioning.</p>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
       </div>
     );
   }
@@ -233,7 +275,7 @@ const BudgetVersioning = () => {
         </div>
         <Button 
           onClick={() => setIsCreating(true)}
-          className="bg-gradient-to-r from-blue-600 to-purple-600"
+          className="bg-gradient-to-r from-orange-600 to-red-600 hover:from-orange-700 hover:to-red-700"
         >
           <Plus className="mr-2 h-4 w-4" />
           Create Version
@@ -294,7 +336,7 @@ const BudgetVersioning = () => {
               </div>
 
               <div className="flex space-x-2">
-                <Button type="submit">Create Version</Button>
+                <Button type="submit" className="bg-orange-600 hover:bg-orange-700">Create Version</Button>
                 <Button 
                   type="button" 
                   variant="outline" 
@@ -360,6 +402,7 @@ const BudgetVersioning = () => {
                             variant="outline"
                             size="sm"
                             onClick={() => handleApprove(version.id)}
+                            className="text-green-600 hover:text-green-700"
                           >
                             <CheckCircle className="h-4 w-4" />
                           </Button>
@@ -367,6 +410,7 @@ const BudgetVersioning = () => {
                             variant="outline"
                             size="sm"
                             onClick={() => handleReject(version.id)}
+                            className="text-red-600 hover:text-red-700"
                           >
                             <XCircle className="h-4 w-4" />
                           </Button>
