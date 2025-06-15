@@ -99,7 +99,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           id: authUser.id,
           full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
           department: authUser.user_metadata?.department || 'General',
-          role: isAdmin ? 'admin' : 'user'
+          role: isAdmin ? 'admin' : 'user',
+          email: authUser.email
         };
 
         const { error: insertError } = await supabase
@@ -124,7 +125,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Profile exists, use it
         setUser({
           id: authUser.id,
-          email: authUser.email ?? '',
+          email: profile.email || authUser.email ?? '',
           full_name: profile.full_name ?? authUser.email?.split('@')[0] ?? 'User',
           department: profile.department ?? 'General',
           role: profile.role ?? (authUser.email === 'admin@gmail.com' ? 'admin' : 'user'),
