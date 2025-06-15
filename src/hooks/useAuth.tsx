@@ -35,17 +35,55 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.log('🔄 Initializing auth...');
         setError(null);
         
+        // Test Supabase connection first
+        try {
+          const { data, error: healthError } = await supabase.from('profiles').select('count').limit(1);
+          if (healthError) {
+            console.error('❌ Supabase connection test failed:', healthError);
+            if (healthError.message.includes('405')) {
+              setError(`Database connection error (405): ${healthError.message}. Please check Supabase configuration.`);
+              setLoading(false);
+              return;
+            }
+          } else {
+            console.log('✅ Supabase connection test passed');
+          }
+        } catch (connectionError) {
+          console.error('❌ Supabase connection test error:', connectionError);
+          setError(`Connection test failed: ${connectionError instanceof Error ? connectionError.message : 'Unknown error'}`);
+          setLoading(false);
+          return;
+        }
+        
         // Get initial session
+        console.log('🔍 Getting initial session...');
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
           console.error('❌ Session error:', sessionError);
+          if (sessionError.message.includes('405')) {
+            setError(`Auth session error (405): ${sessionError.message}. Check Supabase auth configuration.`);
+            setLoading(false);
+            return;
+          }
           setError(`Session error: ${sessionError.message}`);
         }
 
         if (session?.user && mounted) {
           console.log('✅ Found existing session for:', session.user.email);
-          await fetchProfile(session.user);
+          try {
+            await fetchProfile(session.user);
+          } catch (profileError) {
+            console.error('❌ Profile fetch error during init:', profileError);
+            // Continue with basic user info even if profile fails
+            setUser({
+              id: session.user.id,
+              email: session.user.email ?? '',
+              full_name: session.user.email?.split('@')[0] ?? 'User',
+              department: 'General',
+              role: session.user.email === 'admin@gmail.com' ? 'admin' : 'user',
+            });
+          }
         } else {
           console.log('ℹ️ No existing session found');
         }
@@ -57,13 +95,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } catch (error) {
         console.error('💥 Auth initialization error:', error);
         if (mounted) {
-          setError(`Auth initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          if (errorMessage.includes('405')) {
+            setError(`Auth initialization failed (405): ${errorMessage}. This may be a Supabase configuration issue.`);
+          } else {
+            setError(`Auth initialization failed: ${errorMessage}`);
+          }
           setLoading(false);
         }
       }
     };
 
     // Set up auth state listener
+    console.log('🎧 Setting up auth state listener...');
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) {
         console.log('⚠️ Component unmounted, skipping auth state change');
@@ -76,7 +120,19 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       try {
         if (session?.user) {
           console.log('👤 User found in auth state change, fetching profile...');
-          await fetchProfile(session.user);
+          try {
+            await fetchProfile(session.user);
+          } catch (profileError) {
+            console.error('❌ Profile fetch error in auth change:', profileError);
+            // Set basic user info as fallback
+            setUser({
+              id: session.user.id,
+              email: session.user.email ?? '',
+              full_name: session.user.email?.split('@')[0] ?? 'User',
+              department: 'General',
+              role: session.user.email === 'admin@gmail.com' ? 'admin' : 'user',
+            });
+          }
         } else {
           console.log('🚫 No user in auth state change, clearing user');
           setUser(null);
@@ -90,7 +146,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } catch (error) {
         console.error('💥 Error in auth state change handler:', error);
         if (mounted) {
-          setError(`Auth state change failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+          if (errorMessage.includes('405')) {
+            setError(`Auth state change failed (405): ${errorMessage}`);
+          } else {
+            setError(`Auth state change failed: ${errorMessage}`);
+          }
           setLoading(false);
         }
       }
@@ -117,6 +178,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (error && error.code !== 'PGRST116') {
         console.error('❌ Error fetching profile:', error);
+        if (error.message.includes('405')) {
+          throw new Error(`Profile fetch failed (405): ${error.message}. Database query not allowed.`);
+        }
         throw error;
       }
 
@@ -138,6 +202,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
         if (insertError) {
           console.error('❌ Error creating profile:', insertError);
+          if (insertError.message.includes('405')) {
+            throw new Error(`Profile creation failed (405): ${insertError.message}. Insert operation not allowed.`);
+          }
           throw insertError;
         } else {
           console.log('✅ Profile created successfully');
@@ -198,6 +265,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     role?: string
   ) => {
     try {
+      console.log('📝 Attempting sign up for:', email);
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -206,27 +274,43 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           emailRedirectTo: `${window.location.origin}/`
         }
       });
+      
+      if (error && error.message.includes('405')) {
+        console.error('❌ Sign up 405 error:', error);
+        return { error: new Error(`Sign up failed (405): ${error.message}. Auth endpoint not accessible.`) };
+      }
+      
       return { error };
     } catch (error) {
+      console.error('❌ Sign up error:', error);
       return { error };
     }
   };
 
   const signIn = async (email: string, password: string) => {
     try {
+      console.log('🔑 Attempting sign in for:', email);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
+      
+      if (error && error.message.includes('405')) {
+        console.error('❌ Sign in 405 error:', error);
+        return { error: new Error(`Sign in failed (405): ${error.message}. Auth endpoint not accessible.`) };
+      }
+      
       return { error };
     } catch (error) {
+      console.error('❌ Sign in error:', error);
       return { error };
     }
   };
 
   const signOut = async () => {
     try {
+      console.log('🚪 Attempting sign out');
       await supabase.auth.signOut();
       setUser(null);
     } catch (error) {
-      console.error('Error signing out:', error);
+      console.error('❌ Error signing out:', error);
     }
   };
 
