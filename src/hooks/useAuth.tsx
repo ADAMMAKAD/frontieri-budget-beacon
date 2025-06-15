@@ -37,14 +37,14 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         // Test Supabase connection first
         try {
+          console.log('🔍 Testing Supabase connection...');
           const { data, error: healthError } = await supabase.from('profiles').select('count').limit(1);
           if (healthError) {
             console.error('❌ Supabase connection test failed:', healthError);
-            if (healthError.message.includes('405')) {
-              setError(`Database connection error (405): ${healthError.message}. Please check Supabase configuration.`);
-              setLoading(false);
-              return;
-            }
+            console.error('❌ Full error details:', JSON.stringify(healthError, null, 2));
+            setError(`Database connection error: ${healthError.message}`);
+            setLoading(false);
+            return;
           } else {
             console.log('✅ Supabase connection test passed');
           }
@@ -61,11 +61,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         
         if (sessionError) {
           console.error('❌ Session error:', sessionError);
-          if (sessionError.message.includes('405')) {
-            setError(`Auth session error (405): ${sessionError.message}. Check Supabase auth configuration.`);
-            setLoading(false);
-            return;
-          }
+          console.error('❌ Full session error details:', JSON.stringify(sessionError, null, 2));
           setError(`Session error: ${sessionError.message}`);
         }
 
@@ -75,7 +71,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             await fetchProfile(session.user);
           } catch (profileError) {
             console.error('❌ Profile fetch error during init:', profileError);
-            // Continue with basic user info even if profile fails
+            // Use basic user info as fallback
             setUser({
               id: session.user.id,
               email: session.user.email ?? '',
@@ -96,11 +92,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.error('💥 Auth initialization error:', error);
         if (mounted) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          if (errorMessage.includes('405')) {
-            setError(`Auth initialization failed (405): ${errorMessage}. This may be a Supabase configuration issue.`);
-          } else {
-            setError(`Auth initialization failed: ${errorMessage}`);
-          }
+          setError(`Auth initialization failed: ${errorMessage}`);
           setLoading(false);
         }
       }
@@ -147,11 +139,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.error('💥 Error in auth state change handler:', error);
         if (mounted) {
           const errorMessage = error instanceof Error ? error.message : 'Unknown error';
-          if (errorMessage.includes('405')) {
-            setError(`Auth state change failed (405): ${errorMessage}`);
-          } else {
-            setError(`Auth state change failed: ${errorMessage}`);
-          }
+          setError(`Auth state change failed: ${errorMessage}`);
           setLoading(false);
         }
       }
@@ -178,9 +166,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (error && error.code !== 'PGRST116') {
         console.error('❌ Error fetching profile:', error);
-        if (error.message.includes('405')) {
-          throw new Error(`Profile fetch failed (405): ${error.message}. Database query not allowed.`);
-        }
+        console.error('❌ Full profile error details:', JSON.stringify(error, null, 2));
         throw error;
       }
 
@@ -196,15 +182,15 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           role: isAdmin ? 'admin' : 'user'
         };
 
+        console.log('➕ Creating profile with data:', newProfile);
+
         const { error: insertError } = await supabase
           .from('profiles')
           .insert([newProfile]);
 
         if (insertError) {
           console.error('❌ Error creating profile:', insertError);
-          if (insertError.message.includes('405')) {
-            throw new Error(`Profile creation failed (405): ${insertError.message}. Insert operation not allowed.`);
-          }
+          console.error('❌ Full insert error details:', JSON.stringify(insertError, null, 2));
           throw insertError;
         } else {
           console.log('✅ Profile created successfully');
@@ -219,7 +205,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           team_id: '',
         });
       } else if (profile) {
-        console.log('✅ Profile found, setting user data');
+        console.log('✅ Profile found, setting user data:', profile);
         // Profile exists, use it
         setUser({
           id: authUser.id,
@@ -244,6 +230,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log('🎉 Profile fetch completed successfully');
     } catch (error) {
       console.error('💥 Error in fetchProfile:', error);
+      console.error('💥 Full fetchProfile error details:', JSON.stringify(error, null, 2));
       // Set basic user info even if profile operations fail
       setUser({
         id: authUser.id,
@@ -275,9 +262,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         }
       });
       
-      if (error && error.message.includes('405')) {
-        console.error('❌ Sign up 405 error:', error);
-        return { error: new Error(`Sign up failed (405): ${error.message}. Auth endpoint not accessible.`) };
+      if (error) {
+        console.error('❌ Sign up error:', error);
+        console.error('❌ Full sign up error details:', JSON.stringify(error, null, 2));
       }
       
       return { error };
@@ -292,9 +279,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       console.log('🔑 Attempting sign in for:', email);
       const { error } = await supabase.auth.signInWithPassword({ email, password });
       
-      if (error && error.message.includes('405')) {
-        console.error('❌ Sign in 405 error:', error);
-        return { error: new Error(`Sign in failed (405): ${error.message}. Auth endpoint not accessible.`) };
+      if (error) {
+        console.error('❌ Sign in error:', error);
+        console.error('❌ Full sign in error details:', JSON.stringify(error, null, 2));
       }
       
       return { error };

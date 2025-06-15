@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -88,48 +87,69 @@ const ProjectTeamManagement = () => {
   };
 
   const fetchTeamMembers = async () => {
-    // First, let's try a simpler query to avoid the relation error
-    const { data: teamData, error: teamError } = await supabase
-      .from('project_teams')
-      .select('*')
-      .order('created_at', { ascending: false });
+    try {
+      console.log('🔍 Fetching team members...');
+      
+      // First, let's try the simplest possible query
+      const { data: teamData, error: teamError } = await supabase
+        .from('project_teams')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-    if (teamError) {
-      console.error('Error fetching team members:', teamError);
+      if (teamError) {
+        console.error('❌ Error fetching team members:', teamError);
+        console.error('❌ Full team error details:', JSON.stringify(teamError, null, 2));
+        toast({
+          title: "Error",
+          description: `Failed to fetch team members: ${teamError.message}`,
+          variant: "destructive"
+        });
+        return;
+      }
+
+      console.log('✅ Team data fetched:', teamData);
+
+      // Fetch profiles separately
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, department');
+
+      if (profilesError) {
+        console.error('❌ Error fetching profiles:', profilesError);
+        console.error('❌ Full profiles error details:', JSON.stringify(profilesError, null, 2));
+      } else {
+        console.log('✅ Profiles data fetched:', profilesData);
+      }
+
+      // Fetch projects separately
+      const { data: projectsData, error: projectsError } = await supabase
+        .from('projects')
+        .select('id, name');
+
+      if (projectsError) {
+        console.error('❌ Error fetching projects:', projectsError);
+        console.error('❌ Full projects error details:', JSON.stringify(projectsError, null, 2));
+      } else {
+        console.log('✅ Projects data fetched:', projectsData);
+      }
+
+      // Manually join the data
+      const enrichedTeamMembers = teamData?.map(member => ({
+        ...member,
+        profiles: profilesData?.find(profile => profile.id === member.user_id) || null,
+        projects: projectsData?.find(project => project.id === member.project_id) || null
+      })) || [];
+
+      console.log('✅ Enriched team members:', enrichedTeamMembers);
+      setTeamMembers(enrichedTeamMembers);
+    } catch (error) {
+      console.error('💥 Unexpected error in fetchTeamMembers:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch team members",
+        description: "Unexpected error while fetching team members",
         variant: "destructive"
       });
-      return;
     }
-
-    // Fetch profiles separately
-    const { data: profilesData, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id, full_name, department');
-
-    if (profilesError) {
-      console.error('Error fetching profiles:', profilesError);
-    }
-
-    // Fetch projects separately
-    const { data: projectsData, error: projectsError } = await supabase
-      .from('projects')
-      .select('id, name');
-
-    if (projectsError) {
-      console.error('Error fetching projects:', projectsError);
-    }
-
-    // Manually join the data
-    const enrichedTeamMembers = teamData?.map(member => ({
-      ...member,
-      profiles: profilesData?.find(profile => profile.id === member.user_id) || null,
-      projects: projectsData?.find(project => project.id === member.project_id) || null
-    })) || [];
-
-    setTeamMembers(enrichedTeamMembers);
   };
 
   const fetchProjects = async () => {
