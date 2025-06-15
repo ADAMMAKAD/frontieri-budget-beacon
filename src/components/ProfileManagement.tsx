@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +15,6 @@ interface Profile {
   full_name: string;
   department: string;
   role: string;
-  email: string;
 }
 
 const ProfileManagement = () => {
@@ -34,7 +34,6 @@ const ProfileManagement = () => {
 
   const fetchProfile = async () => {
     try {
-      console.log('Fetching profile for user:', user?.id);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
@@ -48,10 +47,9 @@ const ProfileManagement = () => {
       if (data) {
         const profileData: Profile = {
           id: data.id,
-          full_name: data.full_name || user?.full_name || user?.email?.split('@')[0] || 'User',
-          department: data.department || user?.department || 'General',
-          role: userRole || data.role || 'user',
-          email: data.email || user?.email || ''
+          full_name: data.full_name || '',
+          department: data.department || '',
+          role: userRole || 'user'
         };
         setProfile(profileData);
         setEditedProfile(profileData);
@@ -59,44 +57,27 @@ const ProfileManagement = () => {
         // No profile row, create new profile using user fields
         const newProfile: Profile = {
           id: user.id,
-          full_name: user.full_name || user.email?.split('@')[0] || 'User',
-          department: user.department || 'General',
-          role: userRole || (user.email === 'admin@gmail.com' ? 'admin' : 'user'),
-          email: user.email
+          full_name: user.full_name || '',
+          department: user.department || '',
+          role: userRole || 'user'
         };
 
-        // Insert profile with email
+        // Insert minimal profile
         const { error: insertError } = await supabase
           .from('profiles')
           .insert([newProfile]);
 
-        if (insertError) {
-          console.error('Error creating profile:', insertError);
-        } else {
-          console.log('Profile created successfully');
-        }
+        if (insertError) throw insertError;
 
         setProfile(newProfile);
         setEditedProfile(newProfile);
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
-      // Create a fallback profile if everything fails
-      if (user) {
-        const fallbackProfile: Profile = {
-          id: user.id,
-          full_name: user.email?.split('@')[0] || 'User',
-          department: 'General',
-          role: user.email === 'admin@gmail.com' ? 'admin' : 'user',
-          email: user.email
-        };
-        setProfile(fallbackProfile);
-        setEditedProfile(fallbackProfile);
-      }
-      
       toast({
-        title: "Info",
-        description: "Using default profile data. You can edit and save your information."
+        title: "Error",
+        description: "Failed to load profile",
+        variant: "destructive"
       });
     } finally {
       setLoading(false);
@@ -107,10 +88,8 @@ const ProfileManagement = () => {
     try {
       const { error } = await supabase
         .from('profiles')
-        .upsert({
-          id: user?.id,
-          ...editedProfile
-        });
+        .update(editedProfile)
+        .eq('id', user?.id);
 
       if (error) throw error;
 
@@ -191,7 +170,7 @@ const ProfileManagement = () => {
                 <Mail className="h-4 w-4 text-gray-400" />
                 <Input
                   id="email"
-                  value={profile?.email || ''}
+                  value={user?.email || ''}
                   disabled
                   className="bg-gray-50"
                 />
@@ -227,7 +206,7 @@ const ProfileManagement = () => {
               <Label htmlFor="role">Role</Label>
               <Input
                 id="role"
-                value={userRole || profile?.role || 'user'}
+                value={userRole || 'user'}
                 disabled
                 className="bg-gray-50"
               />
@@ -236,6 +215,7 @@ const ProfileManagement = () => {
         </CardContent>
       </Card>
 
+      {/* Admin-only section */}
       {isAdmin && (
         <Card className="border-red-200">
           <CardHeader>
