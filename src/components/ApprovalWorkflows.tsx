@@ -12,12 +12,11 @@ import { CheckCircle, Clock, XCircle, Search, Filter } from 'lucide-react';
 
 interface ApprovalWorkflow {
   id: string;
-  workflow_name: string;
-  request_type: string;
-  requester_id: string;
+  project_id: string;
+  expense_id: string;
   approver_id: string;
   status: string;
-  request_data: any;
+  comments: string;
   created_at: string;
   updated_at: string;
 }
@@ -44,17 +43,14 @@ const ApprovalWorkflows = () => {
 
     if (searchTerm) {
       filtered = filtered.filter(workflow =>
-        workflow.workflow_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        workflow.request_type.toLowerCase().includes(searchTerm.toLowerCase())
+        workflow.id.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        workflow.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        workflow.comments?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
     if (statusFilter !== 'all') {
       filtered = filtered.filter(workflow => workflow.status === statusFilter);
-    }
-
-    if (typeFilter !== 'all') {
-      filtered = filtered.filter(workflow => workflow.request_type === typeFilter);
     }
 
     setFilteredWorkflows(filtered);
@@ -146,7 +142,7 @@ const ApprovalWorkflows = () => {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
-            placeholder="Search workflows by name or type..."
+            placeholder="Search workflows by ID, status, or comments..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -163,17 +159,6 @@ const ApprovalWorkflows = () => {
             <SelectItem value="rejected">Rejected</SelectItem>
           </SelectContent>
         </Select>
-        <Select value={typeFilter} onValueChange={setTypeFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filter by type" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Types</SelectItem>
-            <SelectItem value="budget_approval">Budget Approval</SelectItem>
-            <SelectItem value="expense_approval">Expense Approval</SelectItem>
-            <SelectItem value="project_approval">Project Approval</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {filteredWorkflows.length === 0 ? (
@@ -182,10 +167,10 @@ const ApprovalWorkflows = () => {
             <Clock className="h-8 w-8 text-gray-400" />
           </div>
           <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm || statusFilter !== 'all' || typeFilter !== 'all' ? 'No matching workflows' : 'No approval workflows yet'}
+            {searchTerm || statusFilter !== 'all' ? 'No matching workflows' : 'No approval workflows yet'}
           </h3>
           <p className="text-gray-600">
-            {searchTerm || statusFilter !== 'all' || typeFilter !== 'all'
+            {searchTerm || statusFilter !== 'all'
               ? 'Try adjusting your search criteria'
               : 'Approval workflows will appear here when created'
             }
@@ -197,7 +182,7 @@ const ApprovalWorkflows = () => {
             <Card key={workflow.id} className="hover:shadow-lg transition-shadow">
               <CardHeader>
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{workflow.workflow_name}</CardTitle>
+                  <CardTitle className="text-lg">Workflow #{workflow.id.slice(0, 8)}</CardTitle>
                   <Badge className={getStatusColor(workflow.status)}>
                     <div className="flex items-center space-x-1">
                       {getStatusIcon(workflow.status)}
@@ -206,12 +191,14 @@ const ApprovalWorkflows = () => {
                   </Badge>
                 </div>
                 <CardDescription>
-                  {workflow.request_type} • Created {new Date(workflow.created_at).toLocaleDateString()}
+                  Created {new Date(workflow.created_at).toLocaleDateString()}
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="text-sm text-gray-600">
-                  <p><strong>Request Type:</strong> {workflow.request_type}</p>
+                  {workflow.project_id && <p><strong>Project ID:</strong> {workflow.project_id}</p>}
+                  {workflow.expense_id && <p><strong>Expense ID:</strong> {workflow.expense_id}</p>}
+                  {workflow.comments && <p><strong>Comments:</strong> {workflow.comments}</p>}
                   <p><strong>Last Updated:</strong> {new Date(workflow.updated_at).toLocaleDateString()}</p>
                 </div>
                 

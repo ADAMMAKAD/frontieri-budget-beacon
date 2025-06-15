@@ -13,7 +13,7 @@ import { GitBranch, Clock, CheckCircle, Search, Filter } from 'lucide-react';
 interface BudgetVersion {
   id: string;
   project_id: string;
-  version_name: string;
+  title: string;
   version_number: number;
   status: string;
   created_by: string;
@@ -47,7 +47,7 @@ const BudgetVersioning = () => {
 
     if (searchTerm) {
       filtered = filtered.filter(version =>
-        version.version_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        version.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         version.projects?.name?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
@@ -164,7 +164,7 @@ const BudgetVersioning = () => {
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
-            placeholder="Search by version name or project..."
+            placeholder="Search by version title or project..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="pl-10"
@@ -219,7 +219,7 @@ const BudgetVersioning = () => {
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-lg flex items-center">
                     <GitBranch className="mr-2 h-5 w-5" />
-                    {version.version_name}
+                    {version.title}
                   </CardTitle>
                   <Badge className={getStatusColor(version.status)}>
                     <div className="flex items-center space-x-1">

@@ -54,13 +54,10 @@ export const AdminActivityLog = () => {
 
   const fetchActivities = async () => {
     try {
-      // First try to fetch from admin_activity_log table
+      // Try to fetch from admin_activity_log table first
       const { data: adminLogs, error: adminError } = await supabase
         .from('admin_activity_log')
-        .select(`
-          *,
-          profiles (full_name, email)
-        `)
+        .select('*')
         .order('created_at', { ascending: false })
         .limit(100);
 
@@ -68,9 +65,47 @@ export const AdminActivityLog = () => {
         console.error('Error fetching admin activity log:', adminError);
       }
 
+      // Manually fetch profile data for each activity log
+      let enrichedLogs: ActivityLog[] = [];
+      
+      if (adminLogs && adminLogs.length > 0) {
+        // Get unique admin IDs
+        const adminIds = [...new Set(adminLogs.map(log => log.admin_id))];
+        
+        // Fetch profiles for these admin IDs
+        const { data: profiles, error: profileError } = await supabase
+          .from('profiles')
+          .select('id, full_name, email')
+          .in('id', adminIds);
+
+        if (profileError) {
+          console.error('Error fetching profiles:', profileError);
+        }
+
+        // Create a profiles lookup map
+        const profilesMap = new Map();
+        if (profiles) {
+          profiles.forEach(profile => {
+            profilesMap.set(profile.id, {
+              full_name: profile.full_name || 'Unknown User',
+              email: profile.email || 'No email'
+            });
+          });
+        }
+
+        // Enrich logs with profile data
+        enrichedLogs = adminLogs.map(log => ({
+          ...log,
+          profiles: profilesMap.get(log.admin_id) || {
+            full_name: 'Unknown User',
+            email: 'No email'
+          }
+        }));
+      }
+
       // Create some sample activity data if no real data exists
       let sampleActivities: ActivityLog[] = [];
-      if (!adminLogs || adminLogs.length === 0) {
+      if (enrichedLogs.length === 0) {
         sampleActivities = [
           {
             id: '1',
@@ -125,7 +160,7 @@ export const AdminActivityLog = () => {
         ];
       }
 
-      setActivities(adminLogs && adminLogs.length > 0 ? adminLogs : sampleActivities);
+      setActivities(enrichedLogs.length > 0 ? enrichedLogs : sampleActivities);
     } catch (error) {
       console.error('Error fetching activity log:', error);
       toast({
