@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiService } from "@/services/api";
 
 const monthlyData = [
   { month: "Jan", planned: 400000, actual: 380000 },
@@ -31,16 +31,13 @@ export function BudgetChart() {
 
   const fetchBusinessUnits = async () => {
     try {
-      const { data, error } = await supabase
-        .from('business_units')
-        .select('*')
-        .limit(5);
-
-      if (error) {
-        console.error('Error fetching business units:', error);
+      const response = await apiService.getBusinessUnits();
+      
+      if (response.error) {
+        console.error('Error fetching business units:', response.error);
         setBusinessUnits([]);
       } else {
-        setBusinessUnits(data || []);
+        setBusinessUnits(response.data || []);
       }
     } catch (error) {
       console.error('Error:', error);
@@ -61,7 +58,7 @@ export function BudgetChart() {
   // Generate colors for business units
   const colors = ['#DC2626', '#991B1B', '#B91C1C', '#EF4444', '#F87171'];
   
-  const businessUnitData = businessUnits.map((unit, index) => ({
+  const businessUnitData = businessUnits.slice(0, 5).map((unit, index) => ({
     name: unit.name,
     value: Math.floor(Math.random() * 30) + 10, // Random percentage for demo
     color: colors[index % colors.length]

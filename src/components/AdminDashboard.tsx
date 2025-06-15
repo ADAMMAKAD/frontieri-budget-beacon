@@ -1,15 +1,15 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Shield, Users, Building2, DollarSign, FileText, Activity } from 'lucide-react';
+import { Shield, Users, Building2, DollarSign, FileText } from 'lucide-react';
 import { UserManagement } from './admin/UserManagement';
 import { SystemSettings } from './admin/SystemSettings';
 import { AdminProjects } from './admin/AdminProjects';
 import { AdminExpenses } from './admin/AdminExpenses';
 import { AdminBusinessUnits } from './admin/AdminBusinessUnits';
 import { AdminActivityLog } from './admin/AdminActivityLog';
+import { apiService } from '@/services/api';
 
 interface DashboardStats {
   totalUsers: number;
@@ -35,18 +35,19 @@ const AdminDashboard = () => {
   const fetchDashboardStats = async () => {
     try {
       const [usersResult, projectsResult, expensesResult] = await Promise.all([
-        supabase.from('profiles').select('id', { count: 'exact', head: true }),
-        supabase.from('projects').select('id, status, total_budget'),
-        supabase.from('expenses').select('id, status', { count: 'exact' })
+        apiService.getUsers(),
+        apiService.getProjects(),
+        apiService.getExpenses()
       ]);
 
-      const totalUsers = usersResult.count || 0;
+      const totalUsers = usersResult.data?.length || 0;
       
       const projects = projectsResult.data || [];
       const activeProjects = projects.filter(p => p.status === 'active').length;
       const totalBudget = projects.reduce((sum, p) => sum + (p.total_budget || 0), 0);
       
-      const pendingApprovals = expensesResult.data?.filter(e => e.status === 'pending').length || 0;
+      const expenses = expensesResult.data || [];
+      const pendingApprovals = expenses.filter(e => e.status === 'pending').length;
 
       setStats({
         totalUsers,
