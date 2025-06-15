@@ -266,6 +266,9 @@ const BudgetVersioning = () => {
     );
   }
 
+  // Filter projects to ensure no empty IDs
+  const validProjects = projects.filter(project => project.id && project.id.trim() !== '');
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -303,7 +306,7 @@ const BudgetVersioning = () => {
                       <SelectValue placeholder="Select project" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projects.filter(project => project.id && project.id.trim() !== '').map((project) => (
+                      {validProjects.map((project) => (
                         <SelectItem key={project.id} value={project.id}>
                           {project.name}
                         </SelectItem>

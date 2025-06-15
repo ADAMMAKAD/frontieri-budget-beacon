@@ -196,6 +196,9 @@ const BudgetTracking = () => {
   const totalSpent = categories.reduce((sum, cat) => sum + cat.spent_amount, 0);
   const totalAllocated = categories.reduce((sum, cat) => sum + cat.allocated_amount, 0);
 
+  // Filter projects to ensure no empty IDs
+  const validProjects = projects.filter(project => project.id && project.id.trim() !== '');
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -224,7 +227,7 @@ const BudgetTracking = () => {
               <SelectValue placeholder="Select a project" />
             </SelectTrigger>
             <SelectContent>
-              {projects.map((project) => (
+              {validProjects.map((project) => (
                 <SelectItem key={project.id} value={project.id}>
                   {project.name}
                 </SelectItem>
