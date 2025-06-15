@@ -1,5 +1,5 @@
+
 import { useState, useEffect } from 'react';
-import { apiService } from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,7 +16,6 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface User {
   id: string;
-  email: string;
   full_name: string | null;
   department: string | null;
   role: string;
@@ -299,7 +298,6 @@ export const UserManagement = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Email</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Department</TableHead>
                 <TableHead>Role</TableHead>
@@ -310,8 +308,7 @@ export const UserManagement = () => {
             <TableBody>
               {users.map((user) => (
                 <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.email}</TableCell>
-                  <TableCell>{user.full_name || 'N/A'}</TableCell>
+                  <TableCell className="font-medium">{user.full_name || 'N/A'}</TableCell>
                   <TableCell>{user.department || 'N/A'}</TableCell>
                   <TableCell>
                     <Badge className={getRoleBadgeColor(user.role)}>
