@@ -18,7 +18,7 @@ interface ActivityLog {
   created_at: string;
   profiles?: {
     full_name: string;
-    email: string;
+    department: string;
   };
 }
 
@@ -45,7 +45,7 @@ export const AdminActivityLog = () => {
         activity.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
         activity.target_table.toLowerCase().includes(searchTerm.toLowerCase()) ||
         activity.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        activity.profiles?.email?.toLowerCase().includes(searchTerm.toLowerCase())
+        activity.profiles?.department?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -72,10 +72,10 @@ export const AdminActivityLog = () => {
         // Get unique admin IDs
         const adminIds = [...new Set(adminLogs.map(log => log.admin_id))];
         
-        // Fetch profiles for these admin IDs
+        // Fetch profiles for these admin IDs - only select columns that exist
         const { data: profiles, error: profileError } = await supabase
           .from('profiles')
-          .select('id, full_name, email')
+          .select('id, full_name, department')
           .in('id', adminIds);
 
         if (profileError) {
@@ -88,7 +88,7 @@ export const AdminActivityLog = () => {
           profiles.forEach(profile => {
             profilesMap.set(profile.id, {
               full_name: profile.full_name || 'Unknown User',
-              email: profile.email || 'No email'
+              department: profile.department || 'No department'
             });
           });
         }
@@ -98,7 +98,7 @@ export const AdminActivityLog = () => {
           ...log,
           profiles: profilesMap.get(log.admin_id) || {
             full_name: 'Unknown User',
-            email: 'No email'
+            department: 'No department'
           }
         }));
       }
@@ -115,7 +115,7 @@ export const AdminActivityLog = () => {
             target_id: 'project-1',
             details: { name: 'New Project Created' },
             created_at: new Date().toISOString(),
-            profiles: { full_name: 'System Admin', email: 'admin@example.com' }
+            profiles: { full_name: 'System Admin', department: 'IT' }
           },
           {
             id: '2',
@@ -125,7 +125,7 @@ export const AdminActivityLog = () => {
             target_id: 'category-1',
             details: { field: 'allocated_amount', old_value: 10000, new_value: 15000 },
             created_at: new Date(Date.now() - 3600000).toISOString(),
-            profiles: { full_name: 'System Admin', email: 'admin@example.com' }
+            profiles: { full_name: 'System Admin', department: 'IT' }
           },
           {
             id: '3',
@@ -135,7 +135,7 @@ export const AdminActivityLog = () => {
             target_id: 'expense-1',
             details: { reason: 'Duplicate entry removed' },
             created_at: new Date(Date.now() - 7200000).toISOString(),
-            profiles: { full_name: 'John Doe', email: 'john@example.com' }
+            profiles: { full_name: 'John Doe', department: 'Finance' }
           },
           {
             id: '4',
@@ -145,7 +145,7 @@ export const AdminActivityLog = () => {
             target_id: 'workflow-1',
             details: { workflow_type: 'budget_approval', amount: 50000 },
             created_at: new Date(Date.now() - 10800000).toISOString(),
-            profiles: { full_name: 'System Admin', email: 'admin@example.com' }
+            profiles: { full_name: 'System Admin', department: 'IT' }
           },
           {
             id: '5',
@@ -155,7 +155,7 @@ export const AdminActivityLog = () => {
             target_id: 'unit-1',
             details: { name: 'IT Department', description: 'Information Technology Division' },
             created_at: new Date(Date.now() - 14400000).toISOString(),
-            profiles: { full_name: 'Jane Smith', email: 'jane@example.com' }
+            profiles: { full_name: 'Jane Smith', department: 'HR' }
           }
         ];
       }
@@ -254,7 +254,7 @@ export const AdminActivityLog = () => {
                     <TableCell>
                       <div>
                         <p className="font-medium">{activity.profiles?.full_name || 'Unknown User'}</p>
-                        <p className="text-sm text-gray-500">{activity.profiles?.email || activity.admin_id}</p>
+                        <p className="text-sm text-gray-500">{activity.profiles?.department || activity.admin_id}</p>
                       </div>
                     </TableCell>
                     <TableCell>
