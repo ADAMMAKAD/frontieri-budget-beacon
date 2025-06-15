@@ -90,40 +90,42 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       console.log('Attempting to sign in with:', { email });
       const response = await apiService.login(email, password);
-      
+
       console.log('Sign in response:', response);
-      
+
       if (response.error) {
         console.log('Sign in error from API:', response.error);
         return { error: { message: response.error } };
       }
 
-      // Check if we have a successful response with data
-      if (response.data?.user && response.data?.token) {
+      // Adjusted: Unwrap the actual user+token from response.data.data
+      const rawUserData = response.data?.data?.user;
+      const rawToken = response.data?.data?.token;
+
+      if (rawUserData && rawToken) {
         console.log('Setting token and user data...');
-        apiService.setToken(response.data.token);
-        
+        apiService.setToken(rawToken);
+
         // Transform the response data to match our User interface
-        const apiUser = response.data.user;
         const userData = {
-          id: apiUser.id,
-          email: apiUser.email,
-          full_name: apiUser.firstName + ' ' + apiUser.lastName,
-          department: apiUser.team?.name || 'Unknown',
-          role: apiUser.role.toLowerCase(),
-          team_id: apiUser.team?.id,
+          id: rawUserData.id,
+          email: rawUserData.email,
+          full_name: (rawUserData.firstName || '') + ' ' + (rawUserData.lastName || ''),
+          department: (rawUserData.team && rawUserData.team.name) || 'Unknown',
+          role: (rawUserData.role || 'user').toLowerCase(),
+          team_id: rawUserData.team?.id || null,
           user_metadata: {
-            full_name: apiUser.firstName + ' ' + apiUser.lastName,
-            department: apiUser.team?.name || 'Unknown'
+            full_name: (rawUserData.firstName || '') + ' ' + (rawUserData.lastName || ''),
+            department: (rawUserData.team && rawUserData.team.name) || 'Unknown'
           }
         };
-        
+
         console.log('Transformed user data:', userData);
         setUser(userData);
         console.log('User signed in successfully:', userData);
         return { error: null };
       } else {
-        console.log('Invalid response structure:', response);
+        console.log('Invalid response structure after API login:', response);
         return { error: { message: 'Invalid response from server' } };
       }
     } catch (error) {
