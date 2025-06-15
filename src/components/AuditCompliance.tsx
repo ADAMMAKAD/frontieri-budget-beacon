@@ -1,10 +1,12 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
-import { Shield, AlertTriangle, CheckCircle, Clock, FileText, Calendar } from 'lucide-react';
+import { Shield, AlertTriangle, CheckCircle, Clock, FileText, Calendar, Search, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface AuditRecord {
   id: string;
@@ -27,8 +29,14 @@ interface ComplianceMetrics {
   complianceScore: number;
 }
 
+const ITEMS_PER_PAGE = 5;
+
 const AuditCompliance = () => {
   const [auditRecords, setAuditRecords] = useState<AuditRecord[]>([]);
+  const [filteredRecords, setFilteredRecords] = useState<AuditRecord[]>([]);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [metrics, setMetrics] = useState<ComplianceMetrics>({
     totalTransactions: 0,
     pendingApprovals: 0,
@@ -43,6 +51,29 @@ const AuditCompliance = () => {
     fetchAuditData();
   }, []);
 
+  useEffect(() => {
+    filterRecords();
+  }, [auditRecords, searchTerm, statusFilter]);
+
+  const filterRecords = () => {
+    let filtered = auditRecords;
+
+    if (searchTerm) {
+      filtered = filtered.filter(record =>
+        record.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.projects?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        record.budget_categories?.name.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(record => record.status === statusFilter);
+    }
+
+    setFilteredRecords(filtered);
+    setCurrentPage(1); // Reset to first page when filtering
+  };
+
   const fetchAuditData = async () => {
     try {
       const { data, error } = await supabase
@@ -52,8 +83,7 @@ const AuditCompliance = () => {
           budget_categories (name),
           projects (name)
         `)
-        .order('created_at', { ascending: false })
-        .limit(50);
+        .order('created_at', { ascending: false });
 
       if (error) {
         throw error;
@@ -117,6 +147,9 @@ const AuditCompliance = () => {
     return { label: 'Needs Improvement', color: 'text-red-600', bgColor: 'bg-red-100' };
   };
 
+  const totalPages = Math.ceil(filteredRecords.length / ITEMS_PER_PAGE);
+  const startIndex = (currentPage - 1) * ITEMS_PER_PAGE;
+  const paginatedRecords = filteredRecords.slice(startIndex, startIndex + ITEMS_PER_PAGE);
   const complianceLevel = getComplianceLevel(metrics.complianceScore);
 
   if (loading) {
@@ -142,6 +175,30 @@ const AuditCompliance = () => {
             Compliance: {complianceLevel.label} ({metrics.complianceScore}%)
           </span>
         </div>
+      </div>
+
+      {/* Search and Filter Controls */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Search by description, project, or category..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -194,6 +251,7 @@ const AuditCompliance = () => {
         </Card>
       </div>
 
+      {/* ... keep existing code (compliance status section) */}
       <Card>
         <CardHeader>
           <CardTitle>Compliance Status</CardTitle>
@@ -243,12 +301,42 @@ const AuditCompliance = () => {
 
       <Card>
         <CardHeader>
-          <CardTitle>Audit Trail</CardTitle>
-          <CardDescription>Recent transaction history and approval status</CardDescription>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Audit Trail</CardTitle>
+              <CardDescription>
+                Recent transaction history and approval status
+                {filteredRecords.length !== auditRecords.length && ` (${filteredRecords.length} of ${auditRecords.length} records)`}
+              </CardDescription>
+            </div>
+            {totalPages > 1 && (
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.max(1, currentPage - 1))}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <span className="text-sm text-gray-600">
+                  Page {currentPage} of {totalPages}
+                </span>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setCurrentPage(Math.min(totalPages, currentPage + 1))}
+                  disabled={currentPage === totalPages}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           <div className="space-y-4">
-            {auditRecords.map((record) => (
+            {paginatedRecords.map((record) => (
               <div key={record.id} className="flex items-center justify-between p-4 border rounded-lg">
                 <div className="flex-1">
                   <div className="flex items-center space-x-2">
@@ -281,13 +369,20 @@ const AuditCompliance = () => {
             ))}
           </div>
 
-          {auditRecords.length === 0 && (
+          {filteredRecords.length === 0 && (
             <div className="text-center py-12">
               <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
                 <Shield className="h-8 w-8 text-gray-400" />
               </div>
-              <h3 className="text-lg font-medium text-gray-900 mb-2">No audit records</h3>
-              <p className="text-gray-600">Audit trail will appear here as transactions are processed</p>
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {searchTerm || statusFilter !== 'all' ? 'No matching records' : 'No audit records'}
+              </h3>
+              <p className="text-gray-600">
+                {searchTerm || statusFilter !== 'all'
+                  ? 'Try adjusting your search criteria'
+                  : 'Audit trail will appear here as transactions are processed'
+                }
+              </p>
             </div>
           )}
         </CardContent>

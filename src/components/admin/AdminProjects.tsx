@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useRole } from '@/hooks/useRole';
-import { Plus, Edit, Trash2, Building } from 'lucide-react';
+import { Plus, Edit, Trash2, Building, Search } from 'lucide-react';
 
 interface Project {
   id: string;
@@ -37,11 +36,14 @@ interface BusinessUnit {
 
 export const AdminProjects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
   const [projectAdmins, setProjectAdmins] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [projectData, setProjectData] = useState({
     name: '',
     description: '',
@@ -60,12 +62,34 @@ export const AdminProjects = () => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    filterProjects();
+  }, [projects, searchTerm, statusFilter]);
+
+  const filterProjects = () => {
+    let filtered = projects;
+
+    if (searchTerm) {
+      filtered = filtered.filter(project =>
+        project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        project.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        project.department?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(project => project.status === statusFilter);
+    }
+
+    setFilteredProjects(filtered);
+  };
+
   const fetchData = async () => {
     setLoading(true);
     try {
       // Get projects, business units, and project admins from Supabase
       const [{ data: projectsList, error: projectsError }, { data: businessUnitsList, error: buError }, { data: usersList, error: usersError }] = await Promise.all([
-        supabase.from('projects').select('*'),
+        supabase.from('projects').select('*').order('created_at', { ascending: false }),
         supabase.from('business_units').select('*'),
         supabase.from('profiles').select('*')
       ]);
@@ -367,6 +391,32 @@ export const AdminProjects = () => {
         )}
       </div>
 
+      {/* Search and Filter Controls */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Search projects by name, description, or department..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="planning">Planning</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="on-hold">On Hold</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
       <Card>
         <CardHeader>
           <CardTitle>
@@ -374,6 +424,7 @@ export const AdminProjects = () => {
           </CardTitle>
           <CardDescription>
             {isAdmin ? 'View and manage all projects in the system' : 'Projects you have access to'}
+            {filteredProjects.length !== projects.length && ` (${filteredProjects.length} of ${projects.length})`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -389,7 +440,7 @@ export const AdminProjects = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {projects.map((project) => (
+              {filteredProjects.map((project) => (
                 <TableRow key={project.id}>
                   <TableCell className="font-medium">{project.name}</TableCell>
                   <TableCell>{project.department || 'N/A'}</TableCell>
@@ -429,6 +480,21 @@ export const AdminProjects = () => {
               ))}
             </TableBody>
           </Table>
+          
+          {filteredProjects.length === 0 && (
+            <div className="text-center py-12">
+              <Building className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {searchTerm || statusFilter !== 'all' ? 'No matching projects' : 'No projects found'}
+              </h3>
+              <p className="text-gray-600">
+                {searchTerm || statusFilter !== 'all' 
+                  ? 'Try adjusting your search criteria' 
+                  : 'Create your first project to get started'
+                }
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
