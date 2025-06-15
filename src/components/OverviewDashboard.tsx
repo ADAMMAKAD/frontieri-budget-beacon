@@ -1,4 +1,3 @@
-
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -131,16 +130,6 @@ export function OverviewDashboard() {
               </p>
             </div>
           </div>
-          {user?.email === 'admin@gmail.com' && (
-            <Button 
-              onClick={handleAdminAccess}
-              className="bg-white/20 hover:bg-white/30 text-white border-white/30"
-              variant="outline"
-            >
-              <Settings className="mr-2 h-4 w-4" />
-              Admin Dashboard
-            </Button>
-          )}
         </div>
       </div>
 
