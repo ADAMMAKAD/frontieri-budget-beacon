@@ -27,7 +27,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     // Setup Supabase auth listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
+    const authResponse = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
         fetchProfile(session.user);
       } else {
@@ -47,7 +47,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      // Safely unsubscribe from auth changes
+      if (authResponse?.data?.subscription) {
+        authResponse.data.subscription.unsubscribe();
+      }
+    };
   }, []);
 
   // Pass the user record from auth (for email) and combine with profile
