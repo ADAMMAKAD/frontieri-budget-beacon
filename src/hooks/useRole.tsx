@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 
@@ -11,12 +10,16 @@ export const useRole = () => {
   const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
+    console.log('🔍 useRole effect - Auth status:', { user: !!user, authLoading });
+    
     // Wait for auth to finish loading
     if (authLoading) {
+      console.log('⏳ Auth still loading, waiting...');
       return;
     }
 
     if (user) {
+      console.log('👤 Setting up role for user:', user.email, 'role:', user.role);
       // Check if user email is admin@gmail.com for admin access
       const isAdminEmail = user.email === 'admin@gmail.com';
       const role = isAdminEmail ? 'admin' : (user.role || 'user');
@@ -25,8 +28,11 @@ export const useRole = () => {
       setIsAdmin(isAdminEmail || user.role === 'admin');
       setIsProjectAdmin(isAdminEmail || user.role === 'project_admin' || user.role === 'admin');
       setUserTeamId(user.team_id || null);
+      
+      console.log('✅ Role setup complete:', { role, isAdmin: isAdminEmail || user.role === 'admin' });
       setLoading(false);
     } else {
+      console.log('🚫 No user, clearing role data');
       setUserRole(null);
       setIsAdmin(false);
       setIsProjectAdmin(false);

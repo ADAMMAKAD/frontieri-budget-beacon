@@ -14,6 +14,7 @@ interface User {
 interface AuthContextType {
   user: User | null;
   loading: boolean;
+  error: string | null;
   signUp: (email: string, password: string, fullName: string, department: string, role?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
   signOut: () => Promise<void>;
@@ -24,32 +25,39 @@ const AuthContext = createContext<AuthContextType | undefined>(undefined);
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
 
     const initializeAuth = async () => {
       try {
-        console.log('Initializing auth...');
+        console.log('🔄 Initializing auth...');
+        setError(null);
         
         // Get initial session
         const { data: { session }, error: sessionError } = await supabase.auth.getSession();
         
         if (sessionError) {
-          console.error('Session error:', sessionError);
+          console.error('❌ Session error:', sessionError);
+          setError(`Session error: ${sessionError.message}`);
         }
 
         if (session?.user && mounted) {
-          console.log('Found existing session for:', session.user.email);
+          console.log('✅ Found existing session for:', session.user.email);
           await fetchProfile(session.user);
+        } else {
+          console.log('ℹ️ No existing session found');
         }
 
         if (mounted) {
+          console.log('🏁 Setting loading to false in initializeAuth');
           setLoading(false);
         }
       } catch (error) {
-        console.error('Auth initialization error:', error);
+        console.error('💥 Auth initialization error:', error);
         if (mounted) {
+          setError(`Auth initialization failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
           setLoading(false);
         }
       }
@@ -57,25 +65,41 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
-      if (!mounted) return;
-
-      console.log('Auth state change:', event, session?.user?.email);
-      
-      if (session?.user) {
-        await fetchProfile(session.user);
-      } else {
-        setUser(null);
+      if (!mounted) {
+        console.log('⚠️ Component unmounted, skipping auth state change');
+        return;
       }
+
+      console.log('🔄 Auth state change:', event, session?.user?.email);
+      setError(null);
       
-      // Always set loading to false after handling auth state change
-      if (mounted) {
-        setLoading(false);
+      try {
+        if (session?.user) {
+          console.log('👤 User found in auth state change, fetching profile...');
+          await fetchProfile(session.user);
+        } else {
+          console.log('🚫 No user in auth state change, clearing user');
+          setUser(null);
+        }
+        
+        // Always set loading to false after handling auth state change
+        if (mounted) {
+          console.log('🏁 Setting loading to false in auth state change');
+          setLoading(false);
+        }
+      } catch (error) {
+        console.error('💥 Error in auth state change handler:', error);
+        if (mounted) {
+          setError(`Auth state change failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          setLoading(false);
+        }
       }
     });
 
     initializeAuth();
 
     return () => {
+      console.log('🧹 Cleaning up auth provider');
       mounted = false;
       subscription.unsubscribe();
     };
@@ -83,7 +107,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const fetchProfile = async (authUser: any) => {
     try {
-      console.log('Fetching profile for user:', authUser.id);
+      console.log('📋 Fetching profile for user:', authUser.id, authUser.email);
       
       const { data: profile, error } = await supabase
         .from('profiles')
@@ -92,12 +116,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         .maybeSingle();
 
       if (error && error.code !== 'PGRST116') {
-        console.error('Error fetching profile:', error);
+        console.error('❌ Error fetching profile:', error);
+        throw error;
       }
 
       // Create or update profile if needed
       if (!profile && authUser) {
-        console.log('No profile found, creating new profile...');
+        console.log('➕ No profile found, creating new profile...');
         
         const isAdmin = authUser.email === 'admin@gmail.com';
         const newProfile = {
@@ -112,9 +137,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           .insert([newProfile]);
 
         if (insertError) {
-          console.error('Error creating profile:', insertError);
+          console.error('❌ Error creating profile:', insertError);
+          throw insertError;
         } else {
-          console.log('Profile created successfully');
+          console.log('✅ Profile created successfully');
         }
 
         setUser({
@@ -126,6 +152,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           team_id: '',
         });
       } else if (profile) {
+        console.log('✅ Profile found, setting user data');
         // Profile exists, use it
         setUser({
           id: authUser.id,
@@ -136,6 +163,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           team_id: profile.team_id ?? '',
         });
       } else {
+        console.log('⚠️ Using fallback user object');
         // Fallback user object
         setUser({
           id: authUser.id,
@@ -145,8 +173,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           role: authUser.email === 'admin@gmail.com' ? 'admin' : 'user',
         });
       }
+      
+      console.log('🎉 Profile fetch completed successfully');
     } catch (error) {
-      console.error('Error in fetchProfile:', error);
+      console.error('💥 Error in fetchProfile:', error);
       // Set basic user info even if profile operations fail
       setUser({
         id: authUser.id,
@@ -155,6 +185,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         department: 'General',
         role: authUser.email === 'admin@gmail.com' ? 'admin' : 'user',
       });
+      
+      throw error; // Re-throw to be caught by caller
     }
   };
 
@@ -199,7 +231,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, error, signUp, signIn, signOut }}>
       {children}
     </AuthContext.Provider>
   );

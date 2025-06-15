@@ -1,4 +1,3 @@
-
 import { useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -25,31 +24,63 @@ import { useState } from "react";
 
 const Index = () => {
   const [activeSection, setActiveSection] = useState("overview");
-  const { user, loading } = useAuth();
+  const { user, loading, error } = useAuth();
   const { isAdmin, loading: roleLoading } = useRole();
   const navigate = useNavigate();
 
   useEffect(() => {
+    console.log('🔍 Index useEffect - Auth status:', { user: !!user, loading, error });
+    
     if (!loading && !user) {
-      console.log('No user found, redirecting to auth');
+      console.log('🚪 No user found, redirecting to auth');
       navigate('/auth');
     }
   }, [user, loading, navigate]);
 
   useEffect(() => {
+    console.log('🔍 Index useEffect - Role status:', { activeSection, isAdmin, roleLoading });
+    
     if (!roleLoading && activeSection === "admin" && !isAdmin) {
+      console.log('🚫 User is not admin, switching to overview');
       setActiveSection("overview");
     }
   }, [activeSection, isAdmin, roleLoading]);
 
   // Show loading while auth is initializing
   if (loading) {
-    console.log('Auth loading...');
+    console.log('⏳ Auth loading...');
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600 mx-auto"></div>
           <p className="mt-2 text-gray-600">Loading application...</p>
+          {error && (
+            <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg max-w-md mx-auto">
+              <p className="text-red-700 text-sm font-medium">Error occurred:</p>
+              <p className="text-red-600 text-sm mt-1">{error}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  // Show error if there's an auth error
+  if (error && !user) {
+    console.log('❌ Auth error without user, showing error screen');
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
+        <div className="text-center">
+          <div className="p-6 bg-red-50 border border-red-200 rounded-lg max-w-md mx-auto">
+            <h2 className="text-red-800 text-lg font-semibold mb-2">Authentication Error</h2>
+            <p className="text-red-700 text-sm mb-4">{error}</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors"
+            >
+              Retry
+            </button>
+          </div>
         </div>
       </div>
     );
@@ -57,7 +88,7 @@ const Index = () => {
 
   // Redirect to auth if no user
   if (!user) {
-    console.log('User not authenticated, should redirect to auth');
+    console.log('🚪 User not authenticated, should redirect to auth');
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
@@ -67,7 +98,7 @@ const Index = () => {
     );
   }
 
-  console.log('Rendering main app for user:', user.email);
+  console.log('🎉 Rendering main app for user:', user.email);
 
   const renderContent = () => {
     try {
