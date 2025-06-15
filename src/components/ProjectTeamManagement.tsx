@@ -20,10 +20,10 @@ interface TeamMember {
   profiles?: {
     full_name: string;
     department: string;
-  };
+  } | null;
   projects?: {
     name: string;
-  };
+  } | null;
 }
 
 interface Project {
@@ -66,9 +66,9 @@ const ProjectTeamManagement = () => {
 
     if (searchTerm) {
       filtered = filtered.filter(member =>
-        member.profiles?.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        member.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
         member.profiles?.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.projects?.name.toLowerCase().includes(searchTerm.toLowerCase())
+        member.projects?.name?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
 
@@ -88,24 +88,48 @@ const ProjectTeamManagement = () => {
   };
 
   const fetchTeamMembers = async () => {
-    const { data, error } = await supabase
+    // First, let's try a simpler query to avoid the relation error
+    const { data: teamData, error: teamError } = await supabase
       .from('project_teams')
-      .select(`
-        *,
-        profiles(full_name, department),
-        projects(name)
-      `)
+      .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) {
+    if (teamError) {
+      console.error('Error fetching team members:', teamError);
       toast({
         title: "Error",
         description: "Failed to fetch team members",
         variant: "destructive"
       });
-    } else {
-      setTeamMembers(data || []);
+      return;
     }
+
+    // Fetch profiles separately
+    const { data: profilesData, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id, full_name, department');
+
+    if (profilesError) {
+      console.error('Error fetching profiles:', profilesError);
+    }
+
+    // Fetch projects separately
+    const { data: projectsData, error: projectsError } = await supabase
+      .from('projects')
+      .select('id, name');
+
+    if (projectsError) {
+      console.error('Error fetching projects:', projectsError);
+    }
+
+    // Manually join the data
+    const enrichedTeamMembers = teamData?.map(member => ({
+      ...member,
+      profiles: profilesData?.find(profile => profile.id === member.user_id) || null,
+      projects: projectsData?.find(project => project.id === member.project_id) || null
+    })) || [];
+
+    setTeamMembers(enrichedTeamMembers);
   };
 
   const fetchProjects = async () => {
@@ -272,7 +296,7 @@ const ProjectTeamManagement = () => {
                   <SelectContent>
                     {profiles.filter(profile => profile.id && profile.id.trim() !== '').map((profile) => (
                       <SelectItem key={profile.id} value={profile.id}>
-                        {profile.full_name} ({profile.department})
+                        {profile.full_name || 'Unknown'} ({profile.department || 'No department'})
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -353,19 +377,19 @@ const ProjectTeamManagement = () => {
               <div className="flex items-center justify-between">
                 <CardTitle className="text-lg flex items-center">
                   <Users className="mr-2 h-5 w-5" />
-                  {member.profiles?.full_name}
+                  {member.profiles?.full_name || 'Unknown User'}
                 </CardTitle>
                 <Badge className={getRoleColor(member.role)}>
                   {member.role}
                 </Badge>
               </div>
               <CardDescription>
-                {member.projects?.name}
+                {member.projects?.name || 'Unknown Project'}
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="text-sm text-gray-600">
-                <p><strong>Department:</strong> {member.profiles?.department}</p>
+                <p><strong>Department:</strong> {member.profiles?.department || 'Not specified'}</p>
                 <p><strong>Added:</strong> {new Date(member.created_at).toLocaleDateString()}</p>
               </div>
               
