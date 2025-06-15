@@ -125,8 +125,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         // Profile exists, use it
         setUser({
           id: authUser.id,
-          email: profile.email || authUser.email ?? '',
-          full_name: profile.full_name ?? authUser.email?.split('@')[0] ?? 'User',
+          email: (profile.email || authUser.email) ?? '',
+          full_name: profile.full_name ?? (authUser.email?.split('@')[0] ?? 'User'),
           department: profile.department ?? 'General',
           role: profile.role ?? (authUser.email === 'admin@gmail.com' ? 'admin' : 'user'),
           team_id: profile.team_id ?? '',
