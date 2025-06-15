@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -14,7 +15,6 @@ interface Profile {
   full_name: string;
   department: string;
   role: string;
-  email: string;
 }
 
 const ProfileManagement = () => {
@@ -50,8 +50,7 @@ const ProfileManagement = () => {
           id: data.id,
           full_name: data.full_name || user?.full_name || user?.email?.split('@')[0] || 'User',
           department: data.department || user?.department || 'General',
-          role: userRole || data.role || 'user',
-          email: data.email || user?.email || ''
+          role: userRole || data.role || 'user'
         };
         setProfile(profileData);
         setEditedProfile(profileData);
@@ -61,11 +60,10 @@ const ProfileManagement = () => {
           id: user.id,
           full_name: user.full_name || user.email?.split('@')[0] || 'User',
           department: user.department || 'General',
-          role: userRole || (user.email === 'admin@gmail.com' ? 'admin' : 'user'),
-          email: user.email
+          role: userRole || (user.email === 'admin@gmail.com' ? 'admin' : 'user')
         };
 
-        // Insert profile with email
+        // Insert minimal profile
         const { error: insertError } = await supabase
           .from('profiles')
           .insert([newProfile]);
@@ -87,8 +85,7 @@ const ProfileManagement = () => {
           id: user.id,
           full_name: user.email?.split('@')[0] || 'User',
           department: 'General',
-          role: user.email === 'admin@gmail.com' ? 'admin' : 'user',
-          email: user.email
+          role: user.email === 'admin@gmail.com' ? 'admin' : 'user'
         };
         setProfile(fallbackProfile);
         setEditedProfile(fallbackProfile);
@@ -191,7 +188,7 @@ const ProfileManagement = () => {
                 <Mail className="h-4 w-4 text-gray-400" />
                 <Input
                   id="email"
-                  value={profile?.email || ''}
+                  value={user?.email || ''}
                   disabled
                   className="bg-gray-50"
                 />
@@ -236,6 +233,7 @@ const ProfileManagement = () => {
         </CardContent>
       </Card>
 
+      {/* Admin-only section */}
       {isAdmin && (
         <Card className="border-red-200">
           <CardHeader>
