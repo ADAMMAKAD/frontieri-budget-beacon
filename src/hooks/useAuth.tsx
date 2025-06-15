@@ -1,24 +1,21 @@
-
 import React, { useState, useEffect, createContext, useContext } from 'react';
-import { supabase } from '@/integrations/supabase/client';
-import type { User, Session } from '@supabase/supabase-js';
+import { apiService } from '@/services/api';
 
-interface Profile {
+interface User {
   id: string;
-  full_name: string | null;
-  department: string | null;
+  email: string;
+  full_name: string;
+  department: string;
   role: string;
-  team_id: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
-interface AuthUser extends User {
-  profile?: Profile;
+  team_id?: string;
+  user_metadata?: {
+    full_name?: string;
+    department?: string;
+  };
 }
 
 interface AuthContextType {
-  user: AuthUser | null;
+  user: User | null;
   loading: boolean;
   signUp: (email: string, password: string, fullName: string, department: string, role?: string) => Promise<{ error: any }>;
   signIn: (email: string, password: string) => Promise<{ error: any }>;
@@ -28,66 +25,48 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
-  const [user, setUser] = useState<AuthUser | null>(null);
+  const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Set up auth state listener first
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (event, session) => {
-        if (session?.user) {
-          // Fetch user profile
-          const { data: profile } = await supabase
-            .from('profiles')
-            .select('*')
-            .eq('id', session.user.id)
-            .single();
-          
-          setUser({ ...session.user, profile: profile || undefined });
-        } else {
-          setUser(null);
-        }
-        setLoading(false);
-      }
-    );
-
-    // Check for existing session
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user) {
-        // Fetch user profile
-        supabase
-          .from('profiles')
-          .select('*')
-          .eq('id', session.user.id)
-          .single()
-          .then(({ data: profile }) => {
-            setUser({ ...session.user, profile: profile || undefined });
-            setLoading(false);
-          });
-      } else {
-        setLoading(false);
-      }
-    });
-
-    return () => subscription.unsubscribe();
+    checkAuthState();
   }, []);
+
+  const checkAuthState = async () => {
+    try {
+      const token = localStorage.getItem('auth_token');
+      if (token) {
+        apiService.setToken(token);
+        const response = await apiService.getCurrentUser();
+        if (response.data) {
+          setUser(response.data);
+        } else {
+          apiService.clearToken();
+        }
+      }
+    } catch (error) {
+      console.error('Auth check failed:', error);
+      apiService.clearToken();
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const signUp = async (email: string, password: string, fullName: string, department: string, role?: string) => {
     try {
-      const { error } = await supabase.auth.signUp({
+      const response = await apiService.register({
         email,
         password,
-        options: {
-          emailRedirectTo: `${window.location.origin}/`,
-          data: {
-            full_name: fullName,
-            department: department,
-            role: role || 'user'
-          }
-        }
+        full_name: fullName,
+        department,
+        role: role || 'user'
       });
 
-      return { error };
+      if (response.error) {
+        return { error: { message: response.error } };
+      }
+
+      return { error: null };
     } catch (error) {
       return { error };
     }
@@ -95,12 +74,18 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password
-      });
+      const response = await apiService.login(email, password);
+      
+      if (response.error) {
+        return { error: { message: response.error } };
+      }
 
-      return { error };
+      if (response.data) {
+        apiService.setToken(response.data.token);
+        setUser(response.data.user);
+      }
+
+      return { error: null };
     } catch (error) {
       return { error };
     }
@@ -108,9 +93,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signOut = async () => {
     try {
-      await supabase.auth.signOut();
+      await apiService.logout();
     } catch (error) {
       console.error('Logout error:', error);
+    } finally {
+      apiService.clearToken();
+      setUser(null);
     }
   };
 

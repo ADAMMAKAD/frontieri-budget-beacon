@@ -58,52 +58,40 @@ const Index = () => {
   }
 
   const renderContent = () => {
-    try {
-      switch (activeSection) {
-        case "overview":
-          return <OverviewDashboard />;
-        case "planning":
-          return <BudgetPlanning />;
-        case "allocation":
-          return <BudgetAllocation />;
-        case "tracking":
-          return <BudgetTracking />;
-        case "milestones":
-          return <ProjectMilestones />;
-        case "reporting":
-          return <Reporting />;
-        case "audit":
-          return <AuditCompliance />;
-        case "profile":
-          return <ProfileManagement />;
-        case "expenses":
-          return <ExpenseManagement />;
-        case "business-units":
-          return <BusinessUnitManagement />;
-        case "project-teams":
-          return <ProjectTeamManagement />;
-        case "budget-versions":
-          return <BudgetVersioning />;
-        case "approvals":
-          return <ApprovalWorkflows />;
-        case "notifications":
-          return <NotificationCenter />;
-        case "admin":
-          // Only render admin dashboard if user is admin
-          return isAdmin ? <AdminDashboard /> : <OverviewDashboard />;
-        default:
-          return <OverviewDashboard />;
-      }
-    } catch (error) {
-      console.error('Error rendering content:', error);
-      return (
-        <div className="p-6">
-          <div className="text-center">
-            <h2 className="text-xl font-semibold text-gray-900 mb-2">Something went wrong</h2>
-            <p className="text-gray-600">Please try refreshing the page or selecting a different section.</p>
-          </div>
-        </div>
-      );
+    switch (activeSection) {
+      case "overview":
+        return <OverviewDashboard />;
+      case "planning":
+        return <BudgetPlanning />;
+      case "allocation":
+        return <BudgetAllocation />;
+      case "tracking":
+        return <BudgetTracking />;
+      case "milestones":
+        return <ProjectMilestones />;
+      case "reporting":
+        return <Reporting />;
+      case "audit":
+        return <AuditCompliance />;
+      case "profile":
+        return <ProfileManagement />;
+      case "expenses":
+        return <ExpenseManagement />;
+      case "business-units":
+        return <BusinessUnitManagement />;
+      case "project-teams":
+        return <ProjectTeamManagement />;
+      case "budget-versions":
+        return <BudgetVersioning />;
+      case "approvals":
+        return <ApprovalWorkflows />;
+      case "notifications":
+        return <NotificationCenter />;
+      case "admin":
+        // Only render admin dashboard if user is admin
+        return isAdmin ? <AdminDashboard /> : <OverviewDashboard />;
+      default:
+        return <OverviewDashboard />;
     }
   };
 

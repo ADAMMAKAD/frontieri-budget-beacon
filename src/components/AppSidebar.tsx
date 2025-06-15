@@ -52,7 +52,7 @@ export function AppSidebar({ activeSection, setActiveSection, isAdmin }: AppSide
       <SidebarHeader className="border-b border-gray-200 p-4">
         {!isCollapsed && (
           <div className="flex items-center space-x-2">
-            <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg flex items-center justify-center">
+            <div className="w-8 h-8 bg-gradient-to-r from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
               <span className="text-white font-bold text-sm">F</span>
             </div>
             <div>
@@ -77,7 +77,7 @@ export function AppSidebar({ activeSection, setActiveSection, isAdmin }: AppSide
                     onClick={() => setActiveSection(item.id)}
                     className={`w-full transition-all duration-200 ${
                       activeSection === item.id
-                        ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg"
+                        ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg"
                         : "hover:bg-gray-100 text-gray-700"
                     }`}
                   >
@@ -102,7 +102,7 @@ export function AppSidebar({ activeSection, setActiveSection, isAdmin }: AppSide
                     onClick={() => setActiveSection(item.id)}
                     className={`w-full transition-all duration-200 ${
                       activeSection === item.id
-                        ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg"
+                        ? "bg-gradient-to-r from-blue-500 to-purple-500 text-white shadow-lg"
                         : "hover:bg-gray-100 text-gray-700"
                     }`}
                   >

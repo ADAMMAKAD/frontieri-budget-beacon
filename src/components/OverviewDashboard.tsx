@@ -96,14 +96,14 @@ export function OverviewDashboard() {
   return (
     <div className="p-6 space-y-6">
       {/* Welcome Section */}
-      <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-6 text-white dark:from-orange-600 dark:to-orange-700">
+      <div className="bg-gradient-to-r from-blue-600 to-purple-600 rounded-xl p-6 text-white dark:from-blue-700 dark:to-purple-700">
         <h1 className="text-3xl font-bold mb-2">Welcome to Frontieri PBMS</h1>
-        <p className="text-orange-100 text-lg">
+        <p className="text-blue-100 text-lg">
           Project Budget Management System - Your centralized financial control center
         </p>
         <div className="mt-4 p-3 bg-white/10 rounded-lg">
-          <p className="text-sm text-orange-100 mb-2">🔐 <strong>Admin Access:</strong></p>
-          <p className="text-xs text-orange-200">
+          <p className="text-sm text-blue-100 mb-2">🔐 <strong>Admin Access:</strong></p>
+          <p className="text-xs text-blue-200">
             Create an account with email: <code className="bg-white/20 px-1 rounded">admin@gmail.com</code> and password: <code className="bg-white/20 px-1 rounded">1234567890</code> to access the Admin Dashboard
           </p>
         </div>
@@ -136,10 +136,10 @@ export function OverviewDashboard() {
       <Card className="border-0 shadow-lg bg-card">
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
-            <DollarSign className="h-5 w-5 text-orange-600" />
+            <DollarSign className="h-5 w-5 text-blue-600" />
             <span>Filtered Project Budget Status</span>
             {filteredProjects.length !== projects.length && (
-              <Badge variant="secondary" className="bg-orange-100 text-orange-800">
+              <Badge variant="secondary" className="bg-blue-100 text-blue-800">
                 {filteredProjects.length} of {projects.length}
               </Badge>
             )}
@@ -149,7 +149,7 @@ export function OverviewDashboard() {
         <CardContent>
           {loading ? (
             <div className="flex items-center justify-center p-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
+              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
             </div>
           ) : filteredProjects.length === 0 ? (
             <div className="text-center p-8 text-muted-foreground">
