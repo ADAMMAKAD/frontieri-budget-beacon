@@ -94,29 +94,32 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         return { error: { message: response.error } };
       }
 
-      if (response.data) {
+      if (response.data && response.data.user) {
         apiService.setToken(response.data.token);
         
         // Transform the response data to match our User interface
+        const apiUser = response.data.user;
         const userData = {
-          id: response.data.user.id,
-          email: response.data.user.email,
-          full_name: response.data.user.firstName + ' ' + response.data.user.lastName,
-          department: response.data.user.team?.name || 'Unknown',
-          role: response.data.user.role.toLowerCase(),
-          team_id: response.data.user.team?.id,
+          id: apiUser.id,
+          email: apiUser.email,
+          full_name: apiUser.firstName + ' ' + apiUser.lastName,
+          department: apiUser.team?.name || 'Unknown',
+          role: apiUser.role.toLowerCase(),
+          team_id: apiUser.team?.id,
           user_metadata: {
-            full_name: response.data.user.firstName + ' ' + response.data.user.lastName,
-            department: response.data.user.team?.name || 'Unknown'
+            full_name: apiUser.firstName + ' ' + apiUser.lastName,
+            department: apiUser.team?.name || 'Unknown'
           }
         };
         
         setUser(userData);
         console.log('User signed in successfully:', userData);
+        return { error: null };
+      } else {
+        return { error: { message: 'Invalid response from server' } };
       }
-
-      return { error: null };
     } catch (error) {
+      console.error('Sign in error:', error);
       return { error };
     }
   };
