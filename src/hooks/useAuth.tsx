@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, createContext, useContext } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 
@@ -26,9 +27,9 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   useEffect(() => {
     // Setup Supabase auth listener
-    const { data: subscription } = supabase.auth.onAuthStateChange((_event, session) => {
+    const { subscription } = supabase.auth.onAuthStateChange((_event, session) => {
       if (session?.user) {
-        fetchProfile(session.user.id);
+        fetchProfile(session.user);
       } else {
         setUser(null);
       }
@@ -39,37 +40,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     supabase.auth.getSession().then(({ data }) => {
       const session = data.session;
       if (session?.user) {
-        fetchProfile(session.user.id);
+        fetchProfile(session.user);
       } else {
         setUser(null);
         setLoading(false);
       }
     });
 
-    return () => subscription?.unsubscribe();
+    return () => subscription.unsubscribe();
   }, []);
 
-  const fetchProfile = async (userId: string) => {
-    // The app stores additional info in 'profiles' table, fetch it
+  // Pass the user record from auth (for email) and combine with profile
+  const fetchProfile = async (authUser: any) => {
     const { data, error } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', userId)
-      .single();
+      .eq('id', authUser.id)
+      .maybeSingle();
 
     if (data) {
       setUser({
-        id: userId,
-        email: data.email ?? '',
-        full_name: data.full_name,
-        department: data.department,
-        role: data.role,
-        team_id: data.team_id,
+        id: authUser.id,
+        email: authUser.email ?? '',
+        full_name: data.full_name ?? '',
+        department: data.department ?? '',
+        role: data.role ?? '',
+        team_id: data.team_id ?? '',
       });
     } else {
       setUser({
-        id: userId,
-        email: '', // fallback (should always be set)
+        id: authUser.id,
+        email: authUser.email ?? '',
       });
     }
   };
@@ -81,7 +82,6 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     department: string,
     role?: string
   ) => {
-    // Use Supabase signUp and create user profile row via function or automation
     let { error } = await supabase.auth.signUp({
       email,
       password,

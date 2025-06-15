@@ -61,32 +61,32 @@ export const AdminProjects = () => {
   }, []);
 
   const fetchData = async () => {
+    setLoading(true);
     try {
-      const [projectsResult, businessUnitsResult, usersResult] = await Promise.all([
-        apiService.getProjects(),
-        apiService.getBusinessUnits(),
-        apiService.getUsers()
+      // Get projects, business units, and project admins from Supabase
+      const [{ data: projectsList, error: projectsError }, { data: businessUnitsList, error: buError }, { data: usersList, error: usersError }] = await Promise.all([
+        supabase.from('projects').select('*'),
+        supabase.from('business_units').select('*'),
+        supabase.from('profiles').select('*')
       ]);
 
-      if (projectsResult.error) throw new Error(projectsResult.error);
-      if (businessUnitsResult.error) throw new Error(businessUnitsResult.error);
-      if (usersResult.error) throw new Error(usersResult.error);
+      if (projectsError) throw projectsError;
+      if (buError) throw buError;
+      if (usersError) throw usersError;
 
-      // Filter projects based on user access if not admin
-      let filteredProjects = projectsResult.data || [];
+      let filteredProjects = projectsList || [];
       if (!isAdmin) {
-        filteredProjects = filteredProjects.filter(project => 
+        filteredProjects = filteredProjects.filter(project =>
           canAccessProject(project.team_id, project.project_manager_id)
         );
       }
 
-      // Filter users to show only project admins for assignment
-      const projectAdminUsers = (usersResult.data || []).filter(user => 
+      const projectAdminUsers = (usersList || []).filter(user =>
         user.role === 'project_admin' || user.role === 'admin'
       );
 
       setProjects(filteredProjects);
-      setBusinessUnits(businessUnitsResult.data || []);
+      setBusinessUnits(businessUnitsList || []);
       setProjectAdmins(projectAdminUsers);
     } catch (error) {
       console.error('Error fetching projects:', error);
@@ -103,23 +103,29 @@ export const AdminProjects = () => {
   const saveProject = async () => {
     try {
       if (editingProject) {
-        const response = await apiService.updateProject(editingProject.id, projectData);
-        if (response.error) throw new Error(response.error);
+        const { error } = await supabase
+          .from('projects')
+          .update(projectData)
+          .eq('id', editingProject.id);
+
+        if (error) throw error;
 
         toast({
           title: "Success",
           description: "Project updated successfully"
         });
       } else {
-        const response = await apiService.createProject(projectData);
-        if (response.error) throw new Error(response.error);
+        const { error } = await supabase
+          .from('projects')
+          .insert([projectData]);
+
+        if (error) throw error;
 
         toast({
           title: "Success",
           description: "Project created successfully and project admin assigned"
         });
       }
-
       setDialogOpen(false);
       resetForm();
       fetchData();
@@ -137,8 +143,12 @@ export const AdminProjects = () => {
     if (!confirm('Are you sure you want to delete this project?')) return;
 
     try {
-      const response = await apiService.deleteProject(id);
-      if (response.error) throw new Error(response.error);
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
 
       toast({
         title: "Success",
