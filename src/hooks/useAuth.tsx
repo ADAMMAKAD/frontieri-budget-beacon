@@ -26,30 +26,39 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // First, check for existing session immediately
-    const getInitialSession = async () => {
+    let mounted = true;
+
+    const initializeAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error) {
-          console.error('Error getting session:', error);
-          setLoading(false);
-          return;
-        }
+        console.log('Initializing auth...');
         
-        if (session?.user) {
+        // Get initial session
+        const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+        
+        if (sessionError) {
+          console.error('Session error:', sessionError);
+        }
+
+        if (session?.user && mounted) {
+          console.log('Found existing session for:', session.user.email);
           await fetchProfile(session.user);
         }
-        setLoading(false);
+
+        if (mounted) {
+          setLoading(false);
+        }
       } catch (error) {
-        console.error('Error in getInitialSession:', error);
-        setLoading(false);
+        console.error('Auth initialization error:', error);
+        if (mounted) {
+          setLoading(false);
+        }
       }
     };
 
-    getInitialSession();
-
-    // Setup auth state listener
+    // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+
       console.log('Auth state change:', event, session?.user?.email);
       
       if (session?.user) {
@@ -57,13 +66,12 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       } else {
         setUser(null);
       }
-      
-      if (!loading) {
-        setLoading(false);
-      }
     });
 
+    initializeAuth();
+
     return () => {
+      mounted = false;
       subscription.unsubscribe();
     };
   }, []);
@@ -72,7 +80,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     try {
       console.log('Fetching profile for user:', authUser.id);
       
-      const { data, error } = await supabase
+      const { data: profile, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', authUser.id)
@@ -82,21 +90,21 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         console.error('Error fetching profile:', error);
       }
 
-      // If no profile exists, create one
-      if (!data && authUser) {
+      // Create or update profile if needed
+      if (!profile && authUser) {
         console.log('No profile found, creating new profile...');
+        
+        const isAdmin = authUser.email === 'admin@gmail.com';
         const newProfile = {
           id: authUser.id,
           full_name: authUser.user_metadata?.full_name || authUser.email?.split('@')[0] || 'User',
           department: authUser.user_metadata?.department || 'General',
-          role: authUser.email === 'admin@gmail.com' ? 'admin' : 'user'
+          role: isAdmin ? 'admin' : 'user'
         };
 
         const { error: insertError } = await supabase
           .from('profiles')
-          .insert([newProfile])
-          .select()
-          .single();
+          .insert([newProfile]);
 
         if (insertError) {
           console.error('Error creating profile:', insertError);
@@ -112,20 +120,29 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           role: newProfile.role,
           team_id: '',
         });
-      } else {
+      } else if (profile) {
         // Profile exists, use it
         setUser({
           id: authUser.id,
           email: authUser.email ?? '',
-          full_name: data?.full_name ?? authUser.email?.split('@')[0] ?? 'User',
-          department: data?.department ?? 'General',
-          role: data?.role ?? (authUser.email === 'admin@gmail.com' ? 'admin' : 'user'),
-          team_id: data?.team_id ?? '',
+          full_name: profile.full_name ?? authUser.email?.split('@')[0] ?? 'User',
+          department: profile.department ?? 'General',
+          role: profile.role ?? (authUser.email === 'admin@gmail.com' ? 'admin' : 'user'),
+          team_id: profile.team_id ?? '',
+        });
+      } else {
+        // Fallback user object
+        setUser({
+          id: authUser.id,
+          email: authUser.email ?? '',
+          full_name: authUser.email?.split('@')[0] ?? 'User',
+          department: 'General',
+          role: authUser.email === 'admin@gmail.com' ? 'admin' : 'user',
         });
       }
     } catch (error) {
       console.error('Error in fetchProfile:', error);
-      // Still set basic user info even if profile operations fail
+      // Set basic user info even if profile operations fail
       setUser({
         id: authUser.id,
         email: authUser.email ?? '',
@@ -144,7 +161,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     role?: string
   ) => {
     try {
-      let { error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password,
         options: {
@@ -160,7 +177,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   const signIn = async (email: string, password: string) => {
     try {
-      let { error } = await supabase.auth.signInWithPassword({ email, password });
+      const { error } = await supabase.auth.signInWithPassword({ email, password });
       return { error };
     } catch (error) {
       return { error };
