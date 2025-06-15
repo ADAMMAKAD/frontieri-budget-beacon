@@ -223,7 +223,7 @@ export const AdminProjects = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
       </div>
     );
   }
@@ -238,7 +238,7 @@ export const AdminProjects = () => {
         {canCreateProject() && (
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={resetForm}>
+              <Button onClick={resetForm} className="bg-orange-600 hover:bg-orange-700">
                 <Plus className="mr-2 h-4 w-4" />
                 Add Project
               </Button>
@@ -301,7 +301,7 @@ export const AdminProjects = () => {
                       <SelectValue placeholder="Select business unit" />
                     </SelectTrigger>
                     <SelectContent>
-                      {businessUnits.map((unit) => (
+                      {businessUnits.filter(unit => unit.id && unit.id.trim() !== '').map((unit) => (
                         <SelectItem key={unit.id} value={unit.id}>
                           {unit.name}
                         </SelectItem>
@@ -345,7 +345,7 @@ export const AdminProjects = () => {
                       <SelectValue placeholder="Select project administrator" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projectAdmins.map((admin) => (
+                      {projectAdmins.filter(admin => admin.id && admin.id.trim() !== '').map((admin) => (
                         <SelectItem key={admin.id} value={admin.id}>
                           {admin.full_name} ({admin.role})
                         </SelectItem>
@@ -358,7 +358,7 @@ export const AdminProjects = () => {
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={saveProject}>
+                <Button onClick={saveProject} className="bg-orange-600 hover:bg-orange-700">
                   {editingProject ? 'Update' : 'Create'} Project
                 </Button>
               </DialogFooter>

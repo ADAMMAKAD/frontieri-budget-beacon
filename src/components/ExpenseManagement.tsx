@@ -188,7 +188,7 @@ const ExpenseManagement = () => {
         </div>
         <Button 
           onClick={() => setIsCreating(true)}
-          className="bg-gradient-to-r from-blue-600 to-purple-600"
+          className="bg-gradient-to-r from-orange-600 to-red-600"
         >
           <Plus className="mr-2 h-4 w-4" />
           Add Expense
@@ -217,7 +217,7 @@ const ExpenseManagement = () => {
                       <SelectValue placeholder="Select a project" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projects.map((project) => (
+                      {projects.filter(project => project.id && project.id.trim() !== '').map((project) => (
                         <SelectItem key={project.id} value={project.id}>
                           {project.name}
                         </SelectItem>
@@ -237,7 +237,7 @@ const ExpenseManagement = () => {
                       <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.map((category) => (
+                      {categories.filter(category => category.id && category.id.trim() !== '').map((category) => (
                         <SelectItem key={category.id} value={category.id}>
                           {category.name}
                         </SelectItem>
@@ -281,7 +281,7 @@ const ExpenseManagement = () => {
               </div>
 
               <div className="flex space-x-2">
-                <Button type="submit" className="bg-gradient-to-r from-blue-600 to-purple-600">
+                <Button type="submit" className="bg-gradient-to-r from-orange-600 to-red-600">
                   Create Expense
                 </Button>
                 <Button type="button" variant="outline" onClick={() => setIsCreating(false)}>

@@ -200,7 +200,7 @@ export const UserManagement = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
       </div>
     );
   }
@@ -214,7 +214,7 @@ export const UserManagement = () => {
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="bg-orange-600 hover:bg-orange-700">
               <Plus className="mr-2 h-4 w-4" />
               Add User
             </Button>
@@ -281,7 +281,7 @@ export const UserManagement = () => {
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={createUser}>Create User</Button>
+              <Button onClick={createUser} className="bg-orange-600 hover:bg-orange-700">Create User</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
