@@ -1,5 +1,4 @@
 import { useState, useEffect } from 'react';
-import { apiService } from '@/services/api';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,7 +11,7 @@ import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useRole } from '@/hooks/useRole';
-import { Plus, Edit, Trash2, Building } from 'lucide-react';
+import { Plus, Edit, Trash2, Building, Search } from 'lucide-react';
 
 interface Project {
   id: string;
@@ -37,11 +36,14 @@ interface BusinessUnit {
 
 export const AdminProjects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
   const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
   const [projectAdmins, setProjectAdmins] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [projectData, setProjectData] = useState({
     name: '',
     description: '',
@@ -60,33 +62,55 @@ export const AdminProjects = () => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    filterProjects();
+  }, [projects, searchTerm, statusFilter]);
+
+  const filterProjects = () => {
+    let filtered = projects;
+
+    if (searchTerm) {
+      filtered = filtered.filter(project =>
+        project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        project.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        project.department?.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+    }
+
+    if (statusFilter !== 'all') {
+      filtered = filtered.filter(project => project.status === statusFilter);
+    }
+
+    setFilteredProjects(filtered);
+  };
+
   const fetchData = async () => {
+    setLoading(true);
     try {
-      const [projectsResult, businessUnitsResult, usersResult] = await Promise.all([
-        apiService.getProjects(),
-        apiService.getBusinessUnits(),
-        apiService.getUsers()
+      // Get projects, business units, and project admins from Supabase
+      const [{ data: projectsList, error: projectsError }, { data: businessUnitsList, error: buError }, { data: usersList, error: usersError }] = await Promise.all([
+        supabase.from('projects').select('*').order('created_at', { ascending: false }),
+        supabase.from('business_units').select('*'),
+        supabase.from('profiles').select('*')
       ]);
 
-      if (projectsResult.error) throw new Error(projectsResult.error);
-      if (businessUnitsResult.error) throw new Error(businessUnitsResult.error);
-      if (usersResult.error) throw new Error(usersResult.error);
+      if (projectsError) throw projectsError;
+      if (buError) throw buError;
+      if (usersError) throw usersError;
 
-      // Filter projects based on user access if not admin
-      let filteredProjects = projectsResult.data || [];
+      let filteredProjects = projectsList || [];
       if (!isAdmin) {
-        filteredProjects = filteredProjects.filter(project => 
+        filteredProjects = filteredProjects.filter(project =>
           canAccessProject(project.team_id, project.project_manager_id)
         );
       }
 
-      // Filter users to show only project admins for assignment
-      const projectAdminUsers = (usersResult.data || []).filter(user => 
+      const projectAdminUsers = (usersList || []).filter(user =>
         user.role === 'project_admin' || user.role === 'admin'
       );
 
       setProjects(filteredProjects);
-      setBusinessUnits(businessUnitsResult.data || []);
+      setBusinessUnits(businessUnitsList || []);
       setProjectAdmins(projectAdminUsers);
     } catch (error) {
       console.error('Error fetching projects:', error);
@@ -103,23 +127,29 @@ export const AdminProjects = () => {
   const saveProject = async () => {
     try {
       if (editingProject) {
-        const response = await apiService.updateProject(editingProject.id, projectData);
-        if (response.error) throw new Error(response.error);
+        const { error } = await supabase
+          .from('projects')
+          .update(projectData)
+          .eq('id', editingProject.id);
+
+        if (error) throw error;
 
         toast({
           title: "Success",
           description: "Project updated successfully"
         });
       } else {
-        const response = await apiService.createProject(projectData);
-        if (response.error) throw new Error(response.error);
+        const { error } = await supabase
+          .from('projects')
+          .insert([projectData]);
+
+        if (error) throw error;
 
         toast({
           title: "Success",
           description: "Project created successfully and project admin assigned"
         });
       }
-
       setDialogOpen(false);
       resetForm();
       fetchData();
@@ -137,8 +167,12 @@ export const AdminProjects = () => {
     if (!confirm('Are you sure you want to delete this project?')) return;
 
     try {
-      const response = await apiService.deleteProject(id);
-      if (response.error) throw new Error(response.error);
+      const { error } = await supabase
+        .from('projects')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
 
       toast({
         title: "Success",
@@ -213,7 +247,7 @@ export const AdminProjects = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
       </div>
     );
   }
@@ -228,7 +262,7 @@ export const AdminProjects = () => {
         {canCreateProject() && (
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button onClick={resetForm}>
+              <Button onClick={resetForm} className="bg-orange-600 hover:bg-orange-700">
                 <Plus className="mr-2 h-4 w-4" />
                 Add Project
               </Button>
@@ -291,7 +325,7 @@ export const AdminProjects = () => {
                       <SelectValue placeholder="Select business unit" />
                     </SelectTrigger>
                     <SelectContent>
-                      {businessUnits.map((unit) => (
+                      {businessUnits.filter(unit => unit.id && unit.id.trim() !== '').map((unit) => (
                         <SelectItem key={unit.id} value={unit.id}>
                           {unit.name}
                         </SelectItem>
@@ -335,7 +369,7 @@ export const AdminProjects = () => {
                       <SelectValue placeholder="Select project administrator" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projectAdmins.map((admin) => (
+                      {projectAdmins.filter(admin => admin.id && admin.id.trim() !== '').map((admin) => (
                         <SelectItem key={admin.id} value={admin.id}>
                           {admin.full_name} ({admin.role})
                         </SelectItem>
@@ -348,13 +382,39 @@ export const AdminProjects = () => {
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={saveProject}>
+                <Button onClick={saveProject} className="bg-orange-600 hover:bg-orange-700">
                   {editingProject ? 'Update' : 'Create'} Project
                 </Button>
               </DialogFooter>
             </DialogContent>
           </Dialog>
         )}
+      </div>
+
+      {/* Search and Filter Controls */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Search projects by name, description, or department..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="planning">Planning</SelectItem>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="on-hold">On Hold</SelectItem>
+            <SelectItem value="completed">Completed</SelectItem>
+            <SelectItem value="cancelled">Cancelled</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <Card>
@@ -364,6 +424,7 @@ export const AdminProjects = () => {
           </CardTitle>
           <CardDescription>
             {isAdmin ? 'View and manage all projects in the system' : 'Projects you have access to'}
+            {filteredProjects.length !== projects.length && ` (${filteredProjects.length} of ${projects.length})`}
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -379,7 +440,7 @@ export const AdminProjects = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {projects.map((project) => (
+              {filteredProjects.map((project) => (
                 <TableRow key={project.id}>
                   <TableCell className="font-medium">{project.name}</TableCell>
                   <TableCell>{project.department || 'N/A'}</TableCell>
@@ -419,6 +480,21 @@ export const AdminProjects = () => {
               ))}
             </TableBody>
           </Table>
+          
+          {filteredProjects.length === 0 && (
+            <div className="text-center py-12">
+              <Building className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {searchTerm || statusFilter !== 'all' ? 'No matching projects' : 'No projects found'}
+              </h3>
+              <p className="text-gray-600">
+                {searchTerm || statusFilter !== 'all' 
+                  ? 'Try adjusting your search criteria' 
+                  : 'Create your first project to get started'
+                }
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

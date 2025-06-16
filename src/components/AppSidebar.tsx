@@ -1,5 +1,6 @@
 
 import { LayoutDashboard, PieChart, DollarSign, TrendingUp, FileText, Shield, Settings, Bell, Users, Building2, UserCog, GitBranch, CheckSquare, ShieldCheck, Target } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 import {
   Sidebar,
   SidebarContent,
@@ -45,7 +46,17 @@ interface AppSidebarProps {
 
 export function AppSidebar({ activeSection, setActiveSection, isAdmin }: AppSidebarProps) {
   const { state } = useSidebar();
+  const navigate = useNavigate();
   const isCollapsed = state === "collapsed";
+
+  const handleNavigation = (itemId: string) => {
+    if (itemId === "admin") {
+      navigate("/admin");
+    } else {
+      navigate("/");
+      setActiveSection(itemId);
+    }
+  };
 
   return (
     <Sidebar className={`border-r border-gray-200 bg-white/80 backdrop-blur-sm ${isCollapsed ? "w-14" : "w-64"}`}>
@@ -74,7 +85,7 @@ export function AppSidebar({ activeSection, setActiveSection, isAdmin }: AppSide
               {menuItems.map((item) => (
                 <SidebarMenuItem key={item.id}>
                   <SidebarMenuButton
-                    onClick={() => setActiveSection(item.id)}
+                    onClick={() => handleNavigation(item.id)}
                     className={`w-full transition-all duration-200 ${
                       activeSection === item.id
                         ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg"
@@ -99,7 +110,7 @@ export function AppSidebar({ activeSection, setActiveSection, isAdmin }: AppSide
               {managementItems.map((item) => (
                 <SidebarMenuItem key={item.id}>
                   <SidebarMenuButton
-                    onClick={() => setActiveSection(item.id)}
+                    onClick={() => handleNavigation(item.id)}
                     className={`w-full transition-all duration-200 ${
                       activeSection === item.id
                         ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg"
@@ -125,7 +136,7 @@ export function AppSidebar({ activeSection, setActiveSection, isAdmin }: AppSide
                 {adminItems.map((item) => (
                   <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton
-                      onClick={() => setActiveSection(item.id)}
+                      onClick={() => handleNavigation(item.id)}
                       className={`w-full transition-all duration-200 ${
                         activeSection === item.id
                           ? "bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg"
@@ -148,7 +159,7 @@ export function AppSidebar({ activeSection, setActiveSection, isAdmin }: AppSide
               <SidebarMenuItem>
                 <SidebarMenuButton 
                   className="text-gray-700 hover:bg-gray-100"
-                  onClick={() => setActiveSection("profile")}
+                  onClick={() => handleNavigation("profile")}
                 >
                   <Settings className={`h-4 w-4 ${isCollapsed ? "mx-auto" : "mr-3"}`} />
                   {!isCollapsed && <span>Profile</span>}

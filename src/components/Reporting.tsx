@@ -1,11 +1,13 @@
-
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { useToast } from '@/hooks/use-toast';
-import { FileText, Download, BarChart3, PieChart, TrendingUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useToast } from '@/hooks/use-toast';
+import { FileText, Download, BarChart3, PieChart, TrendingUp, Search, Grid, List } from 'lucide-react';
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart as RechartsPieChart, Cell, Pie } from 'recharts';
 
 interface Project {
   id: string;
@@ -29,17 +31,23 @@ interface ReportData {
   totalSpent: number;
   budgetUtilization: number;
   categories: BudgetCategory[];
+  projects: Project[];
 }
+
+const COLORS = ['#8884d8', '#82ca9d', '#ffc658', '#ff7300', '#00C49F', '#FFBB28', '#FF8042'];
 
 const Reporting = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>('all');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [viewMode, setViewMode] = useState<'charts' | 'grid'>('charts');
   const [reportData, setReportData] = useState<ReportData>({
     totalProjects: 0,
     totalBudget: 0,
     totalSpent: 0,
     budgetUtilization: 0,
-    categories: []
+    categories: [],
+    projects: []
   });
   const { toast } = useToast();
 
@@ -99,7 +107,8 @@ const Reporting = () => {
         totalBudget,
         totalSpent,
         budgetUtilization: totalBudget > 0 ? (totalSpent / totalBudget) * 100 : 0,
-        categories
+        categories,
+        projects
       });
     } catch (error) {
       toast({
@@ -117,13 +126,18 @@ Generated on: ${new Date().toLocaleDateString()}
 
 Summary:
 - Total Projects: ${reportData.totalProjects}
-- Total Budget: R$${reportData.totalBudget.toLocaleString('pt-BR')}
-- Total Spent: R$${reportData.totalSpent.toLocaleString('pt-BR')}
+- Total Budget: $${reportData.totalBudget.toLocaleString()}
+- Total Spent: $${reportData.totalSpent.toLocaleString()}
 - Budget Utilization: ${reportData.budgetUtilization.toFixed(1)}%
 
 Budget Categories:
 ${reportData.categories.map(cat => 
-  `- ${cat.name}: R$${cat.spent_amount.toLocaleString('pt-BR')} / R$${cat.allocated_amount.toLocaleString('pt-BR')} (${cat.allocated_amount > 0 ? ((cat.spent_amount / cat.allocated_amount) * 100).toFixed(1) : 0}%)`
+  `- ${cat.name}: $${cat.spent_amount.toLocaleString()} / $${cat.allocated_amount.toLocaleString()} (${cat.allocated_amount > 0 ? ((cat.spent_amount / cat.allocated_amount) * 100).toFixed(1) : 0}%)`
+).join('\n')}
+
+Projects:
+${reportData.projects.map(proj => 
+  `- ${proj.name}: $${proj.spent_budget?.toLocaleString() || 0} / $${proj.total_budget?.toLocaleString() || 0} (${proj.status})`
 ).join('\n')}
     `;
 
@@ -143,6 +157,32 @@ ${reportData.categories.map(cat =>
     });
   };
 
+  const filteredProjects = reportData.projects.filter(project =>
+    project.name.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const chartData = reportData.categories.map(cat => ({
+    name: cat.name,
+    allocated: cat.allocated_amount,
+    spent: cat.spent_amount,
+    utilization: cat.allocated_amount > 0 ? (cat.spent_amount / cat.allocated_amount) * 100 : 0
+  }));
+
+  const pieData = reportData.categories.map(cat => ({
+    name: cat.name,
+    value: cat.spent_amount
+  }));
+
+  const projectStatusData = reportData.projects.reduce((acc, project) => {
+    acc[project.status] = (acc[project.status] || 0) + 1;
+    return acc;
+  }, {} as Record<string, number>);
+
+  const statusChartData = Object.entries(projectStatusData).map(([status, count]) => ({
+    name: status,
+    value: count
+  }));
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -150,36 +190,75 @@ ${reportData.categories.map(cat =>
           <h2 className="text-2xl font-bold text-gray-900">Reporting</h2>
           <p className="text-gray-600 mt-1">Generate comprehensive budget reports and analytics</p>
         </div>
-        <Button 
-          onClick={exportReport}
-          className="bg-gradient-to-r from-blue-600 to-purple-600"
-        >
-          <Download className="mr-2 h-4 w-4" />
-          Export Report
-        </Button>
+        <div className="flex space-x-2">
+          <Button
+            variant={viewMode === 'charts' ? 'default' : 'outline'}
+            onClick={() => setViewMode('charts')}
+            size="sm"
+          >
+            <BarChart3 className="mr-2 h-4 w-4" />
+            Charts
+          </Button>
+          <Button
+            variant={viewMode === 'grid' ? 'default' : 'outline'}
+            onClick={() => setViewMode('grid')}
+            size="sm"
+          >
+            <Grid className="mr-2 h-4 w-4" />
+            Grid
+          </Button>
+          <Button 
+            onClick={exportReport}
+            className="bg-gradient-to-r from-blue-600 to-purple-600"
+          >
+            <Download className="mr-2 h-4 w-4" />
+            Export Report
+          </Button>
+        </div>
       </div>
 
-      <Card>
-        <CardHeader>
-          <CardTitle>Report Filter</CardTitle>
-          <CardDescription>Select project scope for the report</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Select value={selectedProject} onValueChange={setSelectedProject}>
-            <SelectTrigger>
-              <SelectValue placeholder="Select project scope" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Projects</SelectItem>
-              {projects.map((project) => (
-                <SelectItem key={project.id} value={project.id}>
-                  {project.name}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </CardContent>
-      </Card>
+      <div className="flex flex-col sm:flex-row gap-4">
+        <Card className="flex-1">
+          <CardHeader>
+            <CardTitle>Report Filter</CardTitle>
+            <CardDescription>Select project scope for the report</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Select value={selectedProject} onValueChange={setSelectedProject}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select project scope" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Projects</SelectItem>
+                {projects.map((project) => (
+                  <SelectItem key={project.id} value={project.id}>
+                    {project.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </CardContent>
+        </Card>
+
+        {viewMode === 'grid' && (
+          <Card className="flex-1">
+            <CardHeader>
+              <CardTitle>Search Projects</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+                <Input
+                  placeholder="Search projects..."
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  className="pl-10"
+                />
+              </div>
+            </CardContent>
+          </Card>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
@@ -200,7 +279,7 @@ ${reportData.categories.map(cat =>
               <BarChart3 className="h-5 w-5 text-green-600" />
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Budget</p>
-                <p className="text-2xl font-bold">R${reportData.totalBudget.toLocaleString('pt-BR')}</p>
+                <p className="text-2xl font-bold">${reportData.totalBudget.toLocaleString()}</p>
               </div>
             </div>
           </CardContent>
@@ -212,7 +291,7 @@ ${reportData.categories.map(cat =>
               <TrendingUp className="h-5 w-5 text-red-600" />
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Spent</p>
-                <p className="text-2xl font-bold">R${reportData.totalSpent.toLocaleString('pt-BR')}</p>
+                <p className="text-2xl font-bold">${reportData.totalSpent.toLocaleString()}</p>
               </div>
             </div>
           </CardContent>
@@ -231,41 +310,191 @@ ${reportData.categories.map(cat =>
         </Card>
       </div>
 
-      {reportData.categories.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Budget Category Performance</CardTitle>
-            <CardDescription>Detailed breakdown by budget category</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              {reportData.categories.map((category) => (
-                <div key={category.id} className="flex items-center justify-between p-4 border rounded-lg">
-                  <div className="flex-1">
-                    <h4 className="font-medium">{category.name}</h4>
-                    <p className="text-sm text-gray-600">
-                      R${category.spent_amount.toLocaleString('pt-BR')} of R${category.allocated_amount.toLocaleString('pt-BR')}
-                    </p>
-                    <div className="w-full bg-gray-200 rounded-full h-2 mt-2">
-                      <div 
-                        className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full" 
-                        style={{ 
-                          width: `${category.allocated_amount > 0 ? Math.min((category.spent_amount / category.allocated_amount) * 100, 100) : 0}%` 
-                        }}
-                      ></div>
-                    </div>
-                  </div>
-                  <div className="text-right ml-4">
-                    <p className="font-semibold">
-                      {category.allocated_amount > 0 ? ((category.spent_amount / category.allocated_amount) * 100).toFixed(1) : 0}%
-                    </p>
-                    <p className="text-sm text-gray-600">Utilized</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
+      {viewMode === 'charts' ? (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Budget Categories Bar Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Budget Categories Performance</CardTitle>
+              <CardDescription>Allocated vs Spent by category</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => `$${Number(value).toLocaleString()}`} />
+                  <Legend />
+                  <Bar dataKey="allocated" fill="#8884d8" name="Allocated" />
+                  <Bar dataKey="spent" fill="#82ca9d" name="Spent" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Spending Distribution Pie Chart */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Spending Distribution</CardTitle>
+              <CardDescription>Budget allocation by category</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <RechartsPieChart>
+                  <Pie
+                    dataKey="value"
+                    data={pieData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    fill="#8884d8"
+                    label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  >
+                    {pieData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value) => `$${Number(value).toLocaleString()}`} />
+                </RechartsPieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Project Status Distribution */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Project Status Distribution</CardTitle>
+              <CardDescription>Projects by current status</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <RechartsPieChart>
+                  <Pie
+                    dataKey="value"
+                    data={statusChartData}
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={80}
+                    fill="#8884d8"
+                    label={({ name, value }) => `${name}: ${value}`}
+                  >
+                    {statusChartData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </RechartsPieChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+
+          {/* Budget Utilization */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Budget Utilization by Category</CardTitle>
+              <CardDescription>Percentage of budget used</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" />
+                  <YAxis />
+                  <Tooltip formatter={(value) => `${Number(value).toFixed(1)}%`} />
+                  <Bar dataKey="utilization" fill="#ffc658" name="Utilization %" />
+                </BarChart>
+              </ResponsiveContainer>
+            </CardContent>
+          </Card>
+        </div>
+      ) : (
+        <div className="space-y-6">
+          {/* Projects Grid */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Projects Overview</CardTitle>
+              <CardDescription>
+                Detailed project information ({filteredProjects.length} of {reportData.projects.length} projects)
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Project Name</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Total Budget</TableHead>
+                    <TableHead>Spent</TableHead>
+                    <TableHead>Utilization</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {filteredProjects.map((project) => (
+                    <TableRow key={project.id}>
+                      <TableCell className="font-medium">{project.name}</TableCell>
+                      <TableCell>
+                        <span className={`px-2 py-1 rounded-full text-xs ${
+                          project.status === 'active' ? 'bg-green-100 text-green-800' :
+                          project.status === 'completed' ? 'bg-blue-100 text-blue-800' :
+                          project.status === 'on-hold' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {project.status}
+                        </span>
+                      </TableCell>
+                      <TableCell>${project.total_budget?.toLocaleString() || 0}</TableCell>
+                      <TableCell>${project.spent_budget?.toLocaleString() || 0}</TableCell>
+                      <TableCell>
+                        {project.total_budget ? 
+                          `${((project.spent_budget || 0) / project.total_budget * 100).toFixed(1)}%` : 
+                          '0%'
+                        }
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* Categories Grid */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Budget Categories</CardTitle>
+              <CardDescription>Category-wise budget breakdown</CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Category</TableHead>
+                    <TableHead>Allocated</TableHead>
+                    <TableHead>Spent</TableHead>
+                    <TableHead>Remaining</TableHead>
+                    <TableHead>Utilization</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {reportData.categories.map((category) => (
+                    <TableRow key={category.id}>
+                      <TableCell className="font-medium">{category.name}</TableCell>
+                      <TableCell>${category.allocated_amount.toLocaleString()}</TableCell>
+                      <TableCell>${category.spent_amount.toLocaleString()}</TableCell>
+                      <TableCell>${(category.allocated_amount - category.spent_amount).toLocaleString()}</TableCell>
+                      <TableCell>
+                        {category.allocated_amount > 0 ? 
+                          `${((category.spent_amount / category.allocated_amount) * 100).toFixed(1)}%` : 
+                          '0%'
+                        }
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+        </div>
       )}
 
       <Card>
@@ -293,7 +522,7 @@ ${reportData.categories.map(cat =>
               <h4 className="font-medium text-green-900">Financial Overview</h4>
               <p className="text-sm text-green-700 mt-1">
                 Total budget allocated across {reportData.totalProjects} project(s) with 
-                R${(reportData.totalBudget - reportData.totalSpent).toLocaleString('pt-BR')} remaining.
+                ${(reportData.totalBudget - reportData.totalSpent).toLocaleString()} remaining.
               </p>
             </div>
           </div>

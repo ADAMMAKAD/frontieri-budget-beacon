@@ -12,10 +12,13 @@ export const useRole = () => {
 
   useEffect(() => {
     if (user) {
-      setUserRole(user.role);
-      setIsAdmin(user.role === 'admin');
-      setIsProjectAdmin(user.role === 'project_admin' || user.role === 'admin');
-      // Note: team_id would come from user profile in your backend
+      // Check if user email is admin@gmail.com for admin access
+      const isAdminEmail = user.email === 'admin@gmail.com';
+      const role = isAdminEmail ? 'admin' : (user.role || 'user');
+      
+      setUserRole(role);
+      setIsAdmin(isAdminEmail || user.role === 'admin');
+      setIsProjectAdmin(isAdminEmail || user.role === 'project_admin' || user.role === 'admin');
       setUserTeamId(user.team_id || null);
       setLoading(false);
     } else {
@@ -75,6 +78,6 @@ export const useRole = () => {
     canAssignProjectAdmin,
     canManageProjectBudget,
     canApproveExpenses,
-    refetch: () => {} // Will be handled by auth context
+    refetch: () => {}
   };
 };

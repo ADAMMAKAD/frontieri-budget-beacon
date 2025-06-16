@@ -42,6 +42,9 @@ export const ProjectFilter: React.FC<ProjectFilterProps> = ({
     selectedTeam !== 'all'
   ].filter(Boolean).length;
 
+  // Filter teams to ensure no empty IDs
+  const validTeams = teams.filter(team => team.id && team.id.trim() !== '');
+
   return (
     <Card className="border-0 shadow-lg bg-card mb-6">
       <CardContent className="p-6">
@@ -123,7 +126,7 @@ export const ProjectFilter: React.FC<ProjectFilterProps> = ({
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Teams</SelectItem>
-                  {teams.map(team => (
+                  {validTeams.map(team => (
                     <SelectItem key={team.id} value={team.id}>
                       {team.name}
                     </SelectItem>

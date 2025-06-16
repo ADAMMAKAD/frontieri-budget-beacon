@@ -38,14 +38,13 @@ const ProfileManagement = () => {
         .from('profiles')
         .select('*')
         .eq('id', user?.id)
-        .single();
+        .maybeSingle();
 
       if (error && error.code !== 'PGRST116') {
         throw error;
       }
 
       if (data) {
-        // Ensure all required fields are present
         const profileData: Profile = {
           id: data.id,
           full_name: data.full_name || '',
@@ -54,21 +53,22 @@ const ProfileManagement = () => {
         };
         setProfile(profileData);
         setEditedProfile(profileData);
-      } else {
-        // Create profile if it doesn't exist
+      } else if (user) {
+        // No profile row, create new profile using user fields
         const newProfile: Profile = {
-          id: user?.id || '',
-          full_name: user?.user_metadata?.full_name || user?.full_name || '',
-          department: user?.user_metadata?.department || user?.department || '',
+          id: user.id,
+          full_name: user.full_name || '',
+          department: user.department || '',
           role: userRole || 'user'
         };
-        
+
+        // Insert minimal profile
         const { error: insertError } = await supabase
           .from('profiles')
           .insert([newProfile]);
 
         if (insertError) throw insertError;
-        
+
         setProfile(newProfile);
         setEditedProfile(newProfile);
       }
@@ -95,7 +95,7 @@ const ProfileManagement = () => {
 
       setProfile({ ...profile, ...editedProfile } as Profile);
       setIsEditing(false);
-      
+
       toast({
         title: "Success",
         description: "Profile updated successfully"

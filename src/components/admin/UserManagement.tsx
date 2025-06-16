@@ -1,6 +1,5 @@
 
 import { useState, useEffect } from 'react';
-import { apiService } from '@/services/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -13,10 +12,10 @@ import { useToast } from '@/hooks/use-toast';
 import { Plus, Trash2, Edit, UserCog } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useRole } from '@/hooks/useRole';
+import { supabase } from '@/integrations/supabase/client';
 
 interface User {
   id: string;
-  email: string;
   full_name: string | null;
   department: string | null;
   role: string;
@@ -50,11 +49,16 @@ export const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      const response = await apiService.getUsers();
-      if (response.error) {
-        throw new Error(response.error);
+      // Get users from Supabase profiles table
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        throw new Error(error.message);
       }
-      setUsers(response.data || []);
+      setUsers(data || []);
     } catch (error) {
       console.error('Error fetching users:', error);
       toast({
@@ -69,16 +73,22 @@ export const UserManagement = () => {
 
   const createUser = async () => {
     try {
-      const response = await apiService.register({
+      // Call supabase.auth.admin.createUser (Server-side), for client: send invite/signup
+      const { error } = await supabase.auth.signUp({
         email: newUserData.email,
         password: newUserData.password,
-        full_name: newUserData.full_name,
-        department: newUserData.department,
-        role: newUserData.role
+        options: {
+          data: {
+            full_name: newUserData.full_name,
+            department: newUserData.department,
+            role: newUserData.role,
+          },
+          emailRedirectTo: `${window.location.origin}/`
+        }
       });
 
-      if (response.error) {
-        throw new Error(response.error);
+      if (error) {
+        throw new Error(error.message);
       }
 
       toast({
@@ -101,7 +111,6 @@ export const UserManagement = () => {
 
   const updateUserRole = async (userId: string, newRole: AppRole) => {
     try {
-      // Only admins can assign admin or project_admin roles
       if ((newRole === 'admin' || newRole === 'project_admin') && !isAdmin) {
         toast({
           title: "Error",
@@ -110,11 +119,14 @@ export const UserManagement = () => {
         });
         return;
       }
+      // Update role in profiles table
+      const { error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', userId);
 
-      const response = await apiService.assignRole(userId, newRole);
-      
-      if (response.error) {
-        throw new Error(response.error);
+      if (error) {
+        throw new Error(error.message);
       }
 
       toast({
@@ -137,10 +149,13 @@ export const UserManagement = () => {
     if (!confirm('Are you sure you want to delete this user?')) return;
 
     try {
-      const response = await apiService.deleteUser(userId);
-      
-      if (response.error) {
-        throw new Error(response.error);
+      // Delete from profiles table; cascade deletes auth user if FK is set up
+      const { error } = await supabase
+        .from('profiles')
+        .delete()
+        .eq('id', userId);
+      if (error) {
+        throw new Error(error.message);
       }
 
       toast({
@@ -185,7 +200,7 @@ export const UserManagement = () => {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
       </div>
     );
   }
@@ -199,7 +214,7 @@ export const UserManagement = () => {
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button>
+            <Button className="bg-orange-600 hover:bg-orange-700">
               <Plus className="mr-2 h-4 w-4" />
               Add User
             </Button>
@@ -266,7 +281,7 @@ export const UserManagement = () => {
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={createUser}>Create User</Button>
+              <Button onClick={createUser} className="bg-orange-600 hover:bg-orange-700">Create User</Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
@@ -283,7 +298,6 @@ export const UserManagement = () => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Email</TableHead>
                 <TableHead>Name</TableHead>
                 <TableHead>Department</TableHead>
                 <TableHead>Role</TableHead>
@@ -294,8 +308,7 @@ export const UserManagement = () => {
             <TableBody>
               {users.map((user) => (
                 <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.email}</TableCell>
-                  <TableCell>{user.full_name || 'N/A'}</TableCell>
+                  <TableCell className="font-medium">{user.full_name || 'N/A'}</TableCell>
                   <TableCell>{user.department || 'N/A'}</TableCell>
                   <TableCell>
                     <Badge className={getRoleBadgeColor(user.role)}>

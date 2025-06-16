@@ -133,6 +133,9 @@ const BudgetAllocation = () => {
   const totalAllocated = categories.reduce((sum, cat) => sum + cat.allocated_amount, 0);
   const remainingBudget = selectedProjectData ? selectedProjectData.total_budget - totalAllocated : 0;
 
+  // Filter projects to ensure no empty IDs
+  const validProjects = projects.filter(project => project.id && project.id.trim() !== '');
+
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -142,7 +145,7 @@ const BudgetAllocation = () => {
         </div>
         <Button 
           onClick={() => setIsCreating(true)}
-          className="bg-gradient-to-r from-blue-600 to-purple-600"
+          className="bg-gradient-to-r from-orange-600 to-red-600"
           disabled={!selectedProject}
         >
           <Plus className="mr-2 h-4 w-4" />
@@ -161,7 +164,7 @@ const BudgetAllocation = () => {
               <SelectValue placeholder="Select a project" />
             </SelectTrigger>
             <SelectContent>
-              {projects.map((project) => (
+              {validProjects.map((project) => (
                 <SelectItem key={project.id} value={project.id}>
                   {project.name} - ${project.total_budget?.toLocaleString()}
                 </SelectItem>
@@ -176,7 +179,7 @@ const BudgetAllocation = () => {
           <Card>
             <CardContent className="pt-6">
               <div className="flex items-center space-x-2">
-                <DollarSign className="h-5 w-5 text-blue-600" />
+                <DollarSign className="h-5 w-5 text-orange-600" />
                 <div>
                   <p className="text-sm font-medium text-gray-600">Total Budget</p>
                   <p className="text-2xl font-bold">R${selectedProjectData.total_budget?.toLocaleString('pt-BR')}</p>
@@ -244,7 +247,7 @@ const BudgetAllocation = () => {
                 </div>
               </div>
               <div className="flex space-x-2">
-                <Button type="submit" className="bg-gradient-to-r from-blue-600 to-purple-600">
+                <Button type="submit" className="bg-gradient-to-r from-orange-600 to-red-600">
                   Add Category
                 </Button>
                 <Button type="button" variant="outline" onClick={() => setIsCreating(false)}>
@@ -276,7 +279,7 @@ const BudgetAllocation = () => {
                     <p className="font-semibold">R${category.allocated_amount?.toLocaleString('pt-BR')}</p>
                     <div className="w-32 bg-gray-200 rounded-full h-2 mt-1">
                       <div 
-                        className="bg-gradient-to-r from-blue-600 to-purple-600 h-2 rounded-full" 
+                        className="bg-gradient-to-r from-orange-600 to-red-600 h-2 rounded-full" 
                         style={{ 
                           width: `${category.allocated_amount > 0 ? (category.spent_amount / category.allocated_amount) * 100 : 0}%` 
                         }}
@@ -299,7 +302,7 @@ const BudgetAllocation = () => {
           <p className="text-gray-600 mb-4">Add budget categories to allocate your project budget</p>
           <Button 
             onClick={() => setIsCreating(true)}
-            className="bg-gradient-to-r from-blue-600 to-purple-600"
+            className="bg-gradient-to-r from-orange-600 to-red-600"
           >
             <Plus className="mr-2 h-4 w-4" />
             Add Category
