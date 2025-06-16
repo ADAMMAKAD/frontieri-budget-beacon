@@ -6,11 +6,9 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import AdminDashboard from "@/components/AdminDashboard";
 import { useAuth } from "@/hooks/useAuth";
-import { useRole } from "@/hooks/useRole";
 
 const AdminPage = () => {
   const { user, loading } = useAuth();
-  const { isAdmin, loading: roleLoading } = useRole();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -20,12 +18,13 @@ const AdminPage = () => {
   }, [user, loading, navigate]);
 
   useEffect(() => {
-    if (!roleLoading && !isAdmin) {
+    // Check if user has admin role
+    if (!loading && user && user.role !== 'admin') {
       navigate('/');
     }
-  }, [isAdmin, roleLoading, navigate]);
+  }, [user, loading, navigate]);
 
-  if (loading || roleLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
@@ -36,9 +35,11 @@ const AdminPage = () => {
     );
   }
 
-  if (!user || !isAdmin) {
+  if (!user || user.role !== 'admin') {
     return null;
   }
+
+  const isAdmin = user.role === 'admin';
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50">
