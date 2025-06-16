@@ -6,9 +6,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { Building, Plus, Edit, Trash2, Users } from 'lucide-react';
+import { Building, Plus, Edit, Trash2, Users, Search, Filter } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface BusinessUnit {
@@ -24,6 +25,8 @@ const BusinessUnitManagement = () => {
   const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
   const [isEditing, setIsEditing] = useState(false);
   const [editingUnit, setEditingUnit] = useState<BusinessUnit | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [sortBy, setSortBy] = useState('created_at');
   const [formData, setFormData] = useState({
     name: '',
     description: '',
@@ -146,6 +149,24 @@ const BusinessUnitManagement = () => {
     }
   };
 
+  const filteredUnits = businessUnits.filter(unit => {
+    const matchesSearch = 
+      unit.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      unit.description?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    return matchesSearch;
+  }).sort((a, b) => {
+    if (sortBy === 'name') {
+      return a.name.localeCompare(b.name);
+    }
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setSortBy('created_at');
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -168,6 +189,34 @@ const BusinessUnitManagement = () => {
           <Plus className="mr-2 h-4 w-4" />
           Add Business Unit
         </Button>
+      </div>
+
+      {/* Search and Filter Controls */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Search business units by name or description..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={sortBy} onValueChange={setSortBy}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Sort by" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="created_at">Recent First</SelectItem>
+            <SelectItem value="name">Name A-Z</SelectItem>
+          </SelectContent>
+        </Select>
+        {(searchTerm || sortBy !== 'created_at') && (
+          <Button variant="outline" onClick={clearFilters}>
+            <Filter className="mr-2 h-4 w-4" />
+            Clear
+          </Button>
+        )}
       </div>
 
       {isEditing && (
@@ -229,7 +278,9 @@ const BusinessUnitManagement = () => {
             <Users className="h-5 w-5" />
             <span>Business Units</span>
           </CardTitle>
-          <CardDescription>Manage your organization's business units</CardDescription>
+          <CardDescription>
+            Manage your organization's business units ({filteredUnits.length} of {businessUnits.length} units)
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -242,7 +293,7 @@ const BusinessUnitManagement = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {businessUnits.map((unit) => (
+              {filteredUnits.map((unit) => (
                 <TableRow key={unit.id}>
                   <TableCell className="font-medium">{unit.name}</TableCell>
                   <TableCell>{unit.description || 'No description'}</TableCell>
@@ -269,6 +320,21 @@ const BusinessUnitManagement = () => {
               ))}
             </TableBody>
           </Table>
+          
+          {filteredUnits.length === 0 && (
+            <div className="text-center py-8">
+              <Building className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {searchTerm ? 'No matching business units' : 'No business units found'}
+              </h3>
+              <p className="text-gray-600">
+                {searchTerm 
+                  ? 'Try adjusting your search criteria'
+                  : 'Create your first business unit to get started'
+                }
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

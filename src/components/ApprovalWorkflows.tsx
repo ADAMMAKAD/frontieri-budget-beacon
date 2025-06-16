@@ -5,9 +5,11 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { FileCheck, Clock, CheckCircle, XCircle, MessageSquare } from 'lucide-react';
+import { FileCheck, Clock, CheckCircle, XCircle, MessageSquare, Search, Filter } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 
 interface ApprovalWorkflow {
@@ -26,6 +28,9 @@ const ApprovalWorkflows = () => {
   const [selectedWorkflow, setSelectedWorkflow] = useState<ApprovalWorkflow | null>(null);
   const [comments, setComments] = useState('');
   const [loading, setLoading] = useState(true);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [typeFilter, setTypeFilter] = useState('all');
   const { toast } = useToast();
   const { user } = useAuth();
 
@@ -134,6 +139,28 @@ const ApprovalWorkflows = () => {
     }
   };
 
+  const filteredWorkflows = workflows.filter(workflow => {
+    const matchesSearch = 
+      workflow.project_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      workflow.expense_id?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      workflow.status.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      workflow.comments?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || workflow.status === statusFilter;
+    
+    const matchesType = typeFilter === 'all' || 
+      (typeFilter === 'project' && workflow.project_id) ||
+      (typeFilter === 'expense' && workflow.expense_id);
+
+    return matchesSearch && matchesStatus && matchesType;
+  });
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setTypeFilter('all');
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
@@ -149,6 +176,46 @@ const ApprovalWorkflows = () => {
           <h2 className="text-2xl font-bold text-gray-900">Approval Workflows</h2>
           <p className="text-gray-600 mt-1">Manage approval requests and workflows</p>
         </div>
+      </div>
+
+      {/* Search and Filter Controls */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
+          <Input
+            placeholder="Search workflows by ID, status, or comments..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="pl-10"
+          />
+        </div>
+        <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Filter by status" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Status</SelectItem>
+            <SelectItem value="pending">Pending</SelectItem>
+            <SelectItem value="approved">Approved</SelectItem>
+            <SelectItem value="rejected">Rejected</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Filter by type" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="project">Projects</SelectItem>
+            <SelectItem value="expense">Expenses</SelectItem>
+          </SelectContent>
+        </Select>
+        {(searchTerm || statusFilter !== 'all' || typeFilter !== 'all') && (
+          <Button variant="outline" onClick={clearFilters}>
+            <Filter className="mr-2 h-4 w-4" />
+            Clear
+          </Button>
+        )}
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
@@ -252,7 +319,9 @@ const ApprovalWorkflows = () => {
             <FileCheck className="h-5 w-5" />
             <span>Approval Requests</span>
           </CardTitle>
-          <CardDescription>Review and manage approval workflows</CardDescription>
+          <CardDescription>
+            Review and manage approval workflows ({filteredWorkflows.length} of {workflows.length} workflows)
+          </CardDescription>
         </CardHeader>
         <CardContent>
           <Table>
@@ -267,7 +336,7 @@ const ApprovalWorkflows = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {workflows.map((workflow) => (
+              {filteredWorkflows.map((workflow) => (
                 <TableRow key={workflow.id}>
                   <TableCell>
                     {workflow.expense_id ? 'Expense' : 'Project'}
@@ -311,6 +380,24 @@ const ApprovalWorkflows = () => {
               ))}
             </TableBody>
           </Table>
+          
+          {filteredWorkflows.length === 0 && (
+            <div className="text-center py-8">
+              <FileCheck className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {searchTerm || statusFilter !== 'all' || typeFilter !== 'all' 
+                  ? 'No matching workflows' 
+                  : 'No workflows found'
+                }
+              </h3>
+              <p className="text-gray-600">
+                {searchTerm || statusFilter !== 'all' || typeFilter !== 'all'
+                  ? 'Try adjusting your search criteria'
+                  : 'Approval workflows will appear here'
+                }
+              </p>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>

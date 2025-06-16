@@ -5,26 +5,27 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Progress } from '@/components/ui/progress';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Target, Calendar, Clock, Search, BarChart3 } from 'lucide-react';
-import { format, parseISO, differenceInDays, addDays, startOfWeek, endOfWeek } from 'date-fns';
+import { Target, Plus, Calendar, BarChart, Search, Filter } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Badge } from '@/components/ui/badge';
+import { format } from 'date-fns';
 
 interface Milestone {
   id: string;
+  project_id: string | null;
   title: string;
-  description: string;
+  description: string | null;
   due_date: string;
   status: string;
   progress: number;
-  project_id: string;
+  created_by: string | null;
   created_at: string;
-  projects?: { name: string };
+  updated_at: string;
 }
 
 interface Project {
@@ -34,17 +35,19 @@ interface Project {
 
 const ProjectMilestones = () => {
   const [milestones, setMilestones] = useState<Milestone[]>([]);
-  const [filteredMilestones, setFilteredMilestones] = useState<Milestone[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [isCreating, setIsCreating] = useState(false);
+  const [editingMilestone, setEditingMilestone] = useState<Milestone | null>(null);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [viewMode, setViewMode] = useState<'list' | 'gantt'>('list');
-  const [newMilestone, setNewMilestone] = useState({
+  const [projectFilter, setProjectFilter] = useState('all');
+  const [formData, setFormData] = useState({
+    project_id: '',
     title: '',
     description: '',
     due_date: '',
-    project_id: '',
+    status: 'not_started',
     progress: 0
   });
   const { toast } = useToast();
@@ -54,99 +57,108 @@ const ProjectMilestones = () => {
     fetchData();
   }, []);
 
-  useEffect(() => {
-    filterMilestones();
-  }, [milestones, searchTerm, statusFilter]);
-
-  const filterMilestones = () => {
-    let filtered = milestones;
-
-    if (searchTerm) {
-      filtered = filtered.filter(milestone =>
-        milestone.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        milestone.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        milestone.projects?.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(milestone => milestone.status === statusFilter);
-    }
-
-    setFilteredMilestones(filtered);
-  };
-
   const fetchData = async () => {
-    await Promise.all([fetchMilestones(), fetchProjects()]);
-  };
+    try {
+      const [milestonesResult, projectsResult] = await Promise.all([
+        supabase.from('project_milestones').select('*').order('due_date', { ascending: true }),
+        supabase.from('projects').select('id, name')
+      ]);
 
-  const fetchMilestones = async () => {
-    const { data, error } = await supabase
-      .from('project_milestones')
-      .select(`
-        *,
-        projects(name)
-      `)
-      .order('due_date', { ascending: true });
+      if (milestonesResult.error) throw milestonesResult.error;
+      if (projectsResult.error) throw projectsResult.error;
 
-    if (error) {
+      setMilestones(milestonesResult.data || []);
+      setProjects(projectsResult.data || []);
+    } catch (error) {
+      console.error('Error fetching data:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch milestones",
+        description: "Failed to load milestones",
         variant: "destructive"
       });
-    } else {
-      setMilestones(data || []);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const fetchProjects = async () => {
-    const { data, error } = await supabase
-      .from('projects')
-      .select('id, name')
-      .order('name');
+  const saveMilestone = async () => {
+    try {
+      if (!formData.project_id || !formData.title || !formData.due_date) {
+        toast({
+          title: "Error",
+          description: "Please fill in all required fields",
+          variant: "destructive"
+        });
+        return;
+      }
 
-    if (error) {
+      if (editingMilestone) {
+        const { error } = await supabase
+          .from('project_milestones')
+          .update({
+            ...formData,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingMilestone.id);
+
+        if (error) throw error;
+
+        toast({
+          title: "Success",
+          description: "Milestone updated successfully"
+        });
+      } else {
+        const { error } = await supabase
+          .from('project_milestones')
+          .insert([{
+            ...formData,
+            created_by: user?.id
+          }]);
+
+        if (error) throw error;
+
+        toast({
+          title: "Success",
+          description: "Milestone created successfully"
+        });
+      }
+
+      resetForm();
+      fetchData();
+    } catch (error: any) {
+      console.error('Error saving milestone:', error);
       toast({
         title: "Error",
-        description: "Failed to fetch projects",
+        description: error.message || "Failed to save milestone",
         variant: "destructive"
       });
-    } else {
-      setProjects(data || []);
     }
   };
 
-  const createMilestone = async (e: React.FormEvent) => {
-    e.preventDefault();
-    
-    const { error } = await supabase
-      .from('project_milestones')
-      .insert([{
-        ...newMilestone,
-        created_by: user?.id
-      }]);
+  const deleteMilestone = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this milestone?')) return;
 
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to create milestone",
-        variant: "destructive"
-      });
-    } else {
+    try {
+      const { error } = await supabase
+        .from('project_milestones')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
+
       toast({
         title: "Success",
-        description: "Milestone created successfully"
+        description: "Milestone deleted successfully"
       });
-      setIsCreating(false);
-      setNewMilestone({
-        title: '',
-        description: '',
-        due_date: '',
-        project_id: '',
-        progress: 0
+
+      fetchData();
+    } catch (error: any) {
+      console.error('Error deleting milestone:', error);
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete milestone",
+        variant: "destructive"
       });
-      fetchMilestones();
     }
   };
 
@@ -154,127 +166,90 @@ const ProjectMilestones = () => {
     switch (status) {
       case 'completed': return 'bg-green-100 text-green-800';
       case 'in_progress': return 'bg-blue-100 text-blue-800';
-      case 'overdue': return 'bg-red-100 text-red-800';
+      case 'not_started': return 'bg-gray-100 text-gray-800';
+      case 'delayed': return 'bg-red-100 text-red-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  const calculateStatus = (milestone: Milestone) => {
-    if (milestone.progress === 100) return 'completed';
-    if (new Date(milestone.due_date) < new Date() && milestone.progress < 100) return 'overdue';
-    if (milestone.progress > 0) return 'in_progress';
-    return 'not_started';
+  const editMilestone = (milestone: Milestone) => {
+    setEditingMilestone(milestone);
+    setFormData({
+      project_id: milestone.project_id || '',
+      title: milestone.title,
+      description: milestone.description || '',
+      due_date: milestone.due_date,
+      status: milestone.status,
+      progress: milestone.progress
+    });
+    setIsCreating(true);
   };
 
-  const GanttView = () => {
-    const today = new Date();
-    const weekStart = startOfWeek(today);
-    const weekEnd = endOfWeek(addDays(today, 30)); // Show next 5 weeks
-    const totalDays = differenceInDays(weekEnd, weekStart);
+  const resetForm = () => {
+    setEditingMilestone(null);
+    setFormData({
+      project_id: '',
+      title: '',
+      description: '',
+      due_date: '',
+      status: 'not_started',
+      progress: 0
+    });
+    setIsCreating(false);
+  };
 
+  const filteredMilestones = milestones.filter(milestone => {
+    const project = projects.find(p => p.id === milestone.project_id);
+    const projectName = project?.name || '';
+    
+    const matchesSearch = 
+      milestone.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      milestone.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      projectName.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    const matchesStatus = statusFilter === 'all' || milestone.status === statusFilter;
+    const matchesProject = projectFilter === 'all' || milestone.project_id === projectFilter;
+
+    return matchesSearch && matchesStatus && matchesProject;
+  });
+
+  const clearFilters = () => {
+    setSearchTerm('');
+    setStatusFilter('all');
+    setProjectFilter('all');
+  };
+
+  // Calculate overall project progress
+  const getProjectProgress = (projectId: string) => {
+    const projectMilestones = milestones.filter(m => m.project_id === projectId);
+    if (projectMilestones.length === 0) return 0;
+    
+    const totalProgress = projectMilestones.reduce((sum, m) => sum + m.progress, 0);
+    return Math.round(totalProgress / projectMilestones.length);
+  };
+
+  if (loading) {
     return (
-      <div className="space-y-4">
-        <div className="bg-white p-4 rounded-lg border">
-          <h3 className="font-semibold mb-4 flex items-center">
-            <BarChart3 className="mr-2 h-5 w-5" />
-            Gantt Chart View
-          </h3>
-          
-          {/* Timeline Header */}
-          <div className="flex mb-4 text-xs text-gray-600 border-b pb-2">
-            <div className="w-64 flex-shrink-0">Milestone</div>
-            <div className="flex-1 grid grid-cols-7 gap-1">
-              {Array.from({ length: 7 }, (_, i) => {
-                const date = addDays(weekStart, i);
-                return (
-                  <div key={i} className="text-center">
-                    {format(date, 'MMM dd')}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Gantt Bars */}
-          <div className="space-y-3">
-            {filteredMilestones.slice(0, 10).map((milestone) => {
-              const dueDate = parseISO(milestone.due_date);
-              const daysFromStart = differenceInDays(dueDate, weekStart);
-              const position = Math.max(0, (daysFromStart / totalDays) * 100);
-              const status = calculateStatus(milestone);
-
-              return (
-                <div key={milestone.id} className="flex items-center">
-                  <div className="w-64 flex-shrink-0 pr-4">
-                    <div className="font-medium text-sm">{milestone.title}</div>
-                    <div className="text-xs text-gray-500">{milestone.projects?.name}</div>
-                  </div>
-                  <div className="flex-1 relative h-8 bg-gray-100 rounded">
-                    <div
-                      className={`absolute top-1 h-6 rounded flex items-center justify-center text-xs font-medium ${
-                        status === 'completed' ? 'bg-green-500 text-white' :
-                        status === 'overdue' ? 'bg-red-500 text-white' :
-                        status === 'in_progress' ? 'bg-blue-500 text-white' :
-                        'bg-gray-400 text-white'
-                      }`}
-                      style={{
-                        left: `${Math.min(position, 85)}%`,
-                        width: '12%',
-                        minWidth: '60px'
-                      }}
-                    >
-                      {milestone.progress}%
-                    </div>
-                    {/* Today indicator */}
-                    {differenceInDays(today, weekStart) >= 0 && differenceInDays(today, weekStart) <= totalDays && (
-                      <div
-                        className="absolute top-0 w-0.5 h-8 bg-red-400"
-                        style={{
-                          left: `${(differenceInDays(today, weekStart) / totalDays) * 100}%`
-                        }}
-                      />
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
-  };
+  }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Project Milestones</h2>
-          <p className="text-gray-600 mt-1">Track and manage project milestones</p>
+          <p className="text-gray-600 mt-1">Track and manage project milestones and deliverables</p>
         </div>
-        <div className="flex space-x-2">
-          <Button
-            variant={viewMode === 'list' ? 'default' : 'outline'}
-            onClick={() => setViewMode('list')}
-            size="sm"
-          >
-            List View
-          </Button>
-          <Button
-            variant={viewMode === 'gantt' ? 'default' : 'outline'}
-            onClick={() => setViewMode('gantt')}
-            size="sm"
-          >
-            <BarChart3 className="mr-2 h-4 w-4" />
-            Gantt View
-          </Button>
-          <Button 
-            onClick={() => setIsCreating(true)}
-            className="bg-gradient-to-r from-purple-600 to-blue-600"
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Add Milestone
-          </Button>
-        </div>
+        <Button 
+          onClick={() => setIsCreating(true)}
+          className="bg-gradient-to-r from-blue-600 to-purple-600"
+        >
+          <Plus className="mr-2 h-4 w-4" />
+          Add Milestone
+        </Button>
       </div>
 
       {/* Search and Filter Controls */}
@@ -297,68 +272,131 @@ const ProjectMilestones = () => {
             <SelectItem value="not_started">Not Started</SelectItem>
             <SelectItem value="in_progress">In Progress</SelectItem>
             <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="overdue">Overdue</SelectItem>
+            <SelectItem value="delayed">Delayed</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={projectFilter} onValueChange={setProjectFilter}>
+          <SelectTrigger className="w-48">
+            <SelectValue placeholder="Filter by project" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Projects</SelectItem>
+            {projects.map((project) => (
+              <SelectItem key={project.id} value={project.id}>
+                {project.name}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {(searchTerm || statusFilter !== 'all' || projectFilter !== 'all') && (
+          <Button variant="outline" onClick={clearFilters}>
+            <Filter className="mr-2 h-4 w-4" />
+            Clear
+          </Button>
+        )}
+      </div>
+
+      {/* Project Progress Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        {projects.map((project) => {
+          const projectMilestones = milestones.filter(m => m.project_id === project.id);
+          const progress = getProjectProgress(project.id);
+          const completedMilestones = projectMilestones.filter(m => m.status === 'completed').length;
+          
+          return (
+            <Card key={project.id}>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-lg">{project.name}</CardTitle>
+                <CardDescription>
+                  {completedMilestones} of {projectMilestones.length} milestones completed
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span>Progress</span>
+                    <span>{progress}%</span>
+                  </div>
+                  <Progress value={progress} className="h-2" />
+                </div>
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
 
       {isCreating && (
         <Card>
           <CardHeader>
-            <CardTitle>Add New Milestone</CardTitle>
-            <CardDescription>Create a new project milestone</CardDescription>
+            <CardTitle className="flex items-center space-x-2">
+              <Target className="h-5 w-5" />
+              <span>{editingMilestone ? 'Edit Milestone' : 'Create Milestone'}</span>
+            </CardTitle>
           </CardHeader>
-          <CardContent>
-            <form onSubmit={createMilestone} className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="project">Project</Label>
-                  <Select 
-                    value={newMilestone.project_id} 
-                    onValueChange={(value) => setNewMilestone(prev => ({ ...prev, project_id: value }))}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select a project" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {projects.filter(project => project.id && project.id.trim() !== '').map((project) => (
-                        <SelectItem key={project.id} value={project.id}>
-                          {project.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="due_date">Due Date</Label>
-                  <Input
-                    id="due_date"
-                    type="date"
-                    value={newMilestone.due_date}
-                    onChange={(e) => setNewMilestone(prev => ({ ...prev, due_date: e.target.value }))}
-                    required
-                  />
-                </div>
+          <CardContent className="space-y-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="project">Project</Label>
+                <Select value={formData.project_id} onValueChange={(value) => setFormData(prev => ({ ...prev, project_id: value }))}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select project" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {projects.map((project) => (
+                      <SelectItem key={project.id} value={project.id}>
+                        {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="title">Title</Label>
+                <Label htmlFor="title">Milestone Title</Label>
                 <Input
                   id="title"
-                  value={newMilestone.title}
-                  onChange={(e) => setNewMilestone(prev => ({ ...prev, title: e.target.value }))}
-                  required
+                  value={formData.title}
+                  onChange={(e) => setFormData(prev => ({ ...prev, title: e.target.value }))}
+                  placeholder="e.g., Phase 1 Completion"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="description">Description</Label>
+              <Textarea
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
+                placeholder="Describe the milestone deliverables..."
+                rows={3}
+              />
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="due_date">Due Date</Label>
+                <Input
+                  id="due_date"
+                  type="date"
+                  value={formData.due_date}
+                  onChange={(e) => setFormData(prev => ({ ...prev, due_date: e.target.value }))}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  value={newMilestone.description}
-                  onChange={(e) => setNewMilestone(prev => ({ ...prev, description: e.target.value }))}
-                />
+                <Label htmlFor="status">Status</Label>
+                <Select value={formData.status} onValueChange={(value) => setFormData(prev => ({ ...prev, status: value }))}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="not_started">Not Started</SelectItem>
+                    <SelectItem value="in_progress">In Progress</SelectItem>
+                    <SelectItem value="completed">Completed</SelectItem>
+                    <SelectItem value="delayed">Delayed</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -368,98 +406,120 @@ const ProjectMilestones = () => {
                   type="number"
                   min="0"
                   max="100"
-                  value={newMilestone.progress}
-                  onChange={(e) => setNewMilestone(prev => ({ ...prev, progress: Number(e.target.value) }))}
+                  value={formData.progress}
+                  onChange={(e) => setFormData(prev => ({ ...prev, progress: Number(e.target.value) }))}
                 />
               </div>
+            </div>
 
-              <div className="flex space-x-2">
-                <Button type="submit" className="bg-gradient-to-r from-purple-600 to-blue-600">
-                  Create Milestone
-                </Button>
-                <Button type="button" variant="outline" onClick={() => setIsCreating(false)}>
-                  Cancel
-                </Button>
-              </div>
-            </form>
+            <div className="flex space-x-2">
+              <Button onClick={saveMilestone}>
+                {editingMilestone ? 'Update' : 'Create'} Milestone
+              </Button>
+              <Button variant="outline" onClick={resetForm}>Cancel</Button>
+            </div>
           </CardContent>
         </Card>
       )}
 
-      {viewMode === 'gantt' ? (
-        <GanttView />
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredMilestones.map((milestone) => {
-            const status = calculateStatus(milestone);
-            return (
-              <Card key={milestone.id} className="hover:shadow-lg transition-shadow">
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg flex items-center">
-                      <Target className="mr-2 h-5 w-5" />
-                      {milestone.title}
-                    </CardTitle>
-                    <Badge className={getStatusColor(status)}>
-                      {status.replace('_', ' ')}
-                    </Badge>
-                  </div>
-                  <CardDescription>
-                    {milestone.projects?.name}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <p className="text-sm text-gray-600">{milestone.description}</p>
-                  
-                  <div className="flex items-center space-x-2 text-sm text-gray-600">
-                    <Calendar className="h-4 w-4" />
-                    <span>Due: {format(parseISO(milestone.due_date), 'MMM dd, yyyy')}</span>
-                  </div>
-                  
-                  <div className="space-y-2">
-                    <div className="flex justify-between text-sm">
-                      <span>Progress</span>
-                      <span>{milestone.progress}%</span>
-                    </div>
-                    <Progress value={milestone.progress} className="h-2" />
-                  </div>
-                  
-                  <div className="flex items-center space-x-2 text-xs text-gray-500">
-                    <Clock className="h-3 w-3" />
-                    <span>Created: {format(parseISO(milestone.created_at), 'MMM dd, yyyy')}</span>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {filteredMilestones.length === 0 && !isCreating && (
-        <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Target className="h-8 w-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm || statusFilter !== 'all' ? 'No matching milestones' : 'No milestones yet'}
-          </h3>
-          <p className="text-gray-600 mb-4">
-            {searchTerm || statusFilter !== 'all'
-              ? 'Try adjusting your search criteria'
-              : 'Add your first milestone to get started'
-            }
-          </p>
-          {!searchTerm && statusFilter === 'all' && (
-            <Button 
-              onClick={() => setIsCreating(true)}
-              className="bg-gradient-to-r from-purple-600 to-blue-600"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Milestone
-            </Button>
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <BarChart className="h-5 w-5" />
+            <span>Milestones Timeline</span>
+          </CardTitle>
+          <CardDescription>
+            Track milestone progress and deadlines ({filteredMilestones.length} of {milestones.length} milestones)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Milestone</TableHead>
+                <TableHead>Project</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Progress</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredMilestones.map((milestone) => {
+                const project = projects.find(p => p.id === milestone.project_id);
+                const isOverdue = new Date(milestone.due_date) < new Date() && milestone.status !== 'completed';
+                
+                return (
+                  <TableRow key={milestone.id}>
+                    <TableCell>
+                      <div>
+                        <div className="font-medium">{milestone.title}</div>
+                        {milestone.description && (
+                          <div className="text-sm text-gray-500">{milestone.description}</div>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>{project?.name || 'Unknown Project'}</TableCell>
+                    <TableCell>
+                      <div className={isOverdue ? 'text-red-600 font-medium' : ''}>
+                        {format(new Date(milestone.due_date), 'MMM dd, yyyy')}
+                        {isOverdue && <div className="text-xs">Overdue</div>}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={getStatusColor(milestone.status)}>
+                        {milestone.status.replace('_', ' ')}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="w-20">
+                        <Progress value={milestone.progress} className="h-2" />
+                        <div className="text-xs text-center mt-1">{milestone.progress}%</div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => editMilestone(milestone)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => deleteMilestone(milestone.id)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+          
+          {filteredMilestones.length === 0 && (
+            <div className="text-center py-8">
+              <Target className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">
+                {searchTerm || statusFilter !== 'all' || projectFilter !== 'all' 
+                  ? 'No matching milestones' 
+                  : 'No milestones found'
+                }
+              </h3>
+              <p className="text-gray-600">
+                {searchTerm || statusFilter !== 'all' || projectFilter !== 'all'
+                  ? 'Try adjusting your search criteria'
+                  : 'Create your first milestone to get started'
+                }
+              </p>
+            </div>
           )}
-        </div>
-      )}
+        </CardContent>
+      </Card>
     </div>
   );
 };
