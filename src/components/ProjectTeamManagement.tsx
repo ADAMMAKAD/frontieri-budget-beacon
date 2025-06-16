@@ -5,454 +5,436 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Badge } from '@/components/ui/badge';
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Users, Trash2, UserPlus, Search } from 'lucide-react';
+import { useAuth } from '@/hooks/useAuth';
+import { useRole } from '@/hooks/useRole';
+import { Users, Plus, Trash2, UserPlus, Eye } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ProjectDetailsModal } from '@/components/ProjectDetailsModal';
 
-interface TeamMember {
+interface ProjectTeam {
   id: string;
-  user_id: string;
   project_id: string;
+  user_id: string;
   role: string;
   created_at: string;
-  profiles?: {
-    full_name: string;
-    department: string;
-  } | null;
-  projects?: {
-    name: string;
-  } | null;
+  projects?: { name: string };
+  profiles?: { full_name: string | null };
 }
 
 interface Project {
   id: string;
   name: string;
-}
-
-interface Profile {
-  id: string;
-  full_name: string;
-  department: string;
+  description?: string;
+  status: string;
+  total_budget: number;
+  spent_budget: number;
+  allocated_budget?: number;
+  start_date?: string;
+  end_date?: string;
+  department?: string;
+  team_id?: string;
+  project_manager_id?: string;
+  created_at: string;
 }
 
 const ProjectTeamManagement = () => {
-  const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
-  const [filteredMembers, setFilteredMembers] = useState<TeamMember[]>([]);
+  const [teams, setTeams] = useState<ProjectTeam[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
-  const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [isCreating, setIsCreating] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [projectFilter, setProjectFilter] = useState('all');
-  const [roleFilter, setRoleFilter] = useState('all');
-  const [newMember, setNewMember] = useState({
-    user_id: '',
+  const [allProjects, setAllProjects] = useState<Project[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<{id: string, full_name: string | null}[]>([]);
+  const [selectedProject, setSelectedProject] = useState<Project | null>(null);
+  const [projectModalOpen, setProjectModalOpen] = useState(false);
+  const [isAdding, setIsAdding] = useState(false);
+  const [formData, setFormData] = useState({
     project_id: '',
+    user_id: '',
     role: 'member'
   });
+  const [loading, setLoading] = useState(true);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const { isAdmin, isProjectAdmin, canAccessProject } = useRole();
 
   useEffect(() => {
     fetchData();
   }, []);
 
-  useEffect(() => {
-    filterMembers();
-  }, [teamMembers, searchTerm, projectFilter, roleFilter]);
-
-  const filterMembers = () => {
-    let filtered = teamMembers;
-
-    if (searchTerm) {
-      filtered = filtered.filter(member =>
-        member.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.profiles?.department?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        member.projects?.name?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (projectFilter !== 'all') {
-      filtered = filtered.filter(member => member.project_id === projectFilter);
-    }
-
-    if (roleFilter !== 'all') {
-      filtered = filtered.filter(member => member.role === roleFilter);
-    }
-
-    setFilteredMembers(filtered);
-  };
-
   const fetchData = async () => {
-    await Promise.all([fetchTeamMembers(), fetchProjects(), fetchProfiles()]);
-  };
-
-  const fetchTeamMembers = async () => {
     try {
-      console.log('🔍 Fetching team members...');
-      
-      // First, let's try the simplest possible query
-      const { data: teamData, error: teamError } = await supabase
+      // Fetch teams with proper joins
+      const { data: teamsData, error: teamsError } = await supabase
         .from('project_teams')
-        .select('*')
+        .select(`
+          id,
+          project_id,
+          user_id,
+          role,
+          created_at
+        `)
         .order('created_at', { ascending: false });
 
-      if (teamError) {
-        console.error('❌ Error fetching team members:', teamError);
-        console.error('❌ Full team error details:', JSON.stringify(teamError, null, 2));
-        toast({
-          title: "Error",
-          description: `Failed to fetch team members: ${teamError.message}`,
-          variant: "destructive"
-        });
-        return;
-      }
+      if (teamsError) throw teamsError;
 
-      console.log('✅ Team data fetched:', teamData);
+      // Fetch ALL projects with complete data for the dropdown
+      const { data: allProjectsData, error: allProjectsError } = await supabase
+        .from('projects')
+        .select(`
+          id,
+          name,
+          description,
+          status,
+          total_budget,
+          spent_budget,
+          allocated_budget,
+          start_date,
+          end_date,
+          department,
+          team_id,
+          project_manager_id,
+          created_at
+        `)
+        .order('name');
 
-      // Fetch profiles separately
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, full_name, department');
+      if (allProjectsError) throw allProjectsError;
 
-      if (profilesError) {
-        console.error('❌ Error fetching profiles:', profilesError);
-        console.error('❌ Full profiles error details:', JSON.stringify(profilesError, null, 2));
-      } else {
-        console.log('✅ Profiles data fetched:', profilesData);
-      }
-
-      // Fetch projects separately
+      // Fetch project names separately for access-controlled view
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
-        .select('id, name');
+        .select(`
+          id,
+          name,
+          description,
+          status,
+          total_budget,
+          spent_budget,
+          allocated_budget,
+          start_date,
+          end_date,
+          department,
+          team_id,
+          project_manager_id,
+          created_at
+        `)
+        .order('name');
 
-      if (projectsError) {
-        console.error('❌ Error fetching projects:', projectsError);
-        console.error('❌ Full projects error details:', JSON.stringify(projectsError, null, 2));
-      } else {
-        console.log('✅ Projects data fetched:', projectsData);
-      }
+      if (projectsError) throw projectsError;
 
-      // Manually join the data
-      const enrichedTeamMembers = teamData?.map(member => ({
-        ...member,
-        profiles: profilesData?.find(profile => profile.id === member.user_id) || null,
-        projects: projectsData?.find(project => project.id === member.project_id) || null
-      })) || [];
+      // Fetch user profiles separately
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name')
+        .order('full_name');
 
-      console.log('✅ Enriched team members:', enrichedTeamMembers);
-      setTeamMembers(enrichedTeamMembers);
+      if (profilesError) throw profilesError;
+
+      // Create lookup maps
+      const projectsMap = new Map(projectsData.map(p => [p.id, p]));
+      const profilesMap = new Map(profilesData.map(p => [p.id, p]));
+
+      // Combine the data
+      const teamsWithDetails = teamsData.map(team => ({
+        ...team,
+        projects: projectsMap.get(team.project_id) ? { name: projectsMap.get(team.project_id)!.name } : undefined,
+        profiles: profilesMap.get(team.user_id) ? { full_name: profilesMap.get(team.user_id)!.full_name } : undefined
+      }));
+
+      // Filter projects based on user access for viewing
+      const accessibleProjects = projectsData.filter(project => 
+        canAccessProject(project.team_id, project.project_manager_id)
+      );
+
+      setTeams(teamsWithDetails);
+      setProjects(accessibleProjects);
+      setAllProjects(allProjectsData || []); // Store all projects for dropdown
+      setAvailableUsers(profilesData);
     } catch (error) {
-      console.error('💥 Unexpected error in fetchTeamMembers:', error);
+      console.error('Error fetching data:', error);
       toast({
         title: "Error",
-        description: "Unexpected error while fetching team members",
+        description: "Failed to load data",
         variant: "destructive"
       });
+    } finally {
+      setLoading(false);
     }
   };
 
-  const fetchProjects = async () => {
-    const { data, error } = await supabase
-      .from('projects')
-      .select('id, name')
-      .order('name');
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to fetch projects",
-        variant: "destructive"
-      });
-    } else {
-      setProjects(data || []);
-    }
-  };
-
-  const fetchProfiles = async () => {
-    const { data, error } = await supabase
-      .from('profiles')
-      .select('id, full_name, department')
-      .order('full_name');
-
-    if (error) {
-      toast({
-        title: "Error",
-        description: "Failed to fetch profiles",
-        variant: "destructive"
-      });
-    } else {
-      setProfiles(data || []);
-    }
-  };
-
-  const addTeamMember = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // Check if member already exists in this project
-    const existingMember = teamMembers.find(
-      member => member.user_id === newMember.user_id && member.project_id === newMember.project_id
-    );
+    try {
+      const { error } = await supabase
+        .from('project_teams')
+        .insert([{
+          project_id: formData.project_id,
+          user_id: formData.user_id,
+          role: formData.role
+        }]);
 
-    if (existingMember) {
+      if (error) throw error;
+      
       toast({
-        title: "Error",
-        description: "This user is already a member of this project",
-        variant: "destructive"
+        title: "Success",
+        description: "Team member added successfully"
       });
-      return;
-    }
 
-    const { error } = await supabase
-      .from('project_teams')
-      .insert([newMember]);
-
-    if (error) {
+      setFormData({ project_id: '', user_id: '', role: 'member' });
+      setIsAdding(false);
+      fetchData();
+    } catch (error) {
+      console.error('Error adding team member:', error);
       toast({
         title: "Error",
         description: "Failed to add team member",
         variant: "destructive"
       });
-    } else {
-      toast({
-        title: "Success",
-        description: "Team member added successfully"
-      });
-      setIsCreating(false);
-      setNewMember({
-        user_id: '',
-        project_id: '',
-        role: 'member'
-      });
-      fetchTeamMembers();
     }
   };
 
-  const removeTeamMember = async (id: string) => {
+  const handleRemove = async (id: string) => {
     if (!confirm('Are you sure you want to remove this team member?')) return;
 
-    const { error } = await supabase
-      .from('project_teams')
-      .delete()
-      .eq('id', id);
+    try {
+      const { error } = await supabase
+        .from('project_teams')
+        .delete()
+        .eq('id', id);
 
-    if (error) {
+      if (error) throw error;
+      
+      toast({
+        title: "Success",
+        description: "Team member removed successfully"
+      });
+      
+      fetchData();
+    } catch (error) {
+      console.error('Error removing team member:', error);
       toast({
         title: "Error",
         description: "Failed to remove team member",
         variant: "destructive"
       });
-    } else {
-      toast({
-        title: "Success",
-        description: "Team member removed successfully"
-      });
-      fetchTeamMembers();
     }
   };
 
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case 'lead': return 'bg-purple-100 text-purple-800';
-      case 'admin': return 'bg-red-100 text-red-800';
-      case 'member': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+  const getProject = (projectId: string) => {
+    return allProjects.find(p => p.id === projectId);
+  };
+
+  const handleViewProject = (projectId: string) => {
+    const project = getProject(projectId);
+    if (project) {
+      setSelectedProject(project);
+      setProjectModalOpen(true);
     }
   };
+
+  // Check if user has permission to manage teams
+  if (!isAdmin && !isProjectAdmin) {
+    return (
+      <div className="p-6">
+        <Card>
+          <CardContent className="p-6">
+            <p className="text-muted-foreground">You don't have permission to manage project teams.</p>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center p-8">
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Project Team Management</h2>
-          <p className="text-gray-600 mt-1">Manage team members across projects</p>
+          <p className="text-gray-600 mt-1">Manage project team members and roles</p>
         </div>
-        <Dialog open={isCreating} onOpenChange={setIsCreating}>
-          <DialogTrigger asChild>
-            <Button 
-              onClick={() => setIsCreating(true)}
-              className="bg-gradient-to-r from-green-600 to-blue-600"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Team Member
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add Team Member</DialogTitle>
-              <DialogDescription>
-                Assign a user to a project team
-              </DialogDescription>
-            </DialogHeader>
-            <form onSubmit={addTeamMember} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="project">Project</Label>
-                <Select 
-                  value={newMember.project_id} 
-                  onValueChange={(value) => setNewMember(prev => ({ ...prev, project_id: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a project" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {projects.filter(project => project.id && project.id.trim() !== '').map((project) => (
-                      <SelectItem key={project.id} value={project.id}>
-                        {project.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+        <Button 
+          onClick={() => setIsAdding(true)}
+          className="bg-gradient-to-r from-blue-600 to-purple-600"
+        >
+          <UserPlus className="mr-2 h-4 w-4" />
+          Add Team Member
+        </Button>
+      </div>
+
+      {isAdding && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center space-x-2">
+              <UserPlus className="h-5 w-5" />
+              <span>Add Team Member</span>
+            </CardTitle>
+            <CardDescription>Assign team members to projects</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSubmit} className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="project">Project *</Label>
+                  <Select
+                    value={formData.project_id}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, project_id: value }))}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select project" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {allProjects.map((project) => (
+                        <SelectItem key={project.id} value={project.id}>
+                          {project.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="user_id">Team Member *</Label>
+                  <Select
+                    value={formData.user_id}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, user_id: value }))}
+                    required
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select user" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {availableUsers.map((user) => (
+                        <SelectItem key={user.id} value={user.id}>
+                          {user.full_name || 'Unnamed User'}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="role">Role</Label>
+                  <Select
+                    value={formData.role}
+                    onValueChange={(value) => setFormData(prev => ({ ...prev, role: value }))}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="member">Member</SelectItem>
+                      <SelectItem value="lead">Lead</SelectItem>
+                      <SelectItem value="admin">Admin</SelectItem>
+                      {isAdmin && <SelectItem value="project_admin">Project Admin</SelectItem>}
+                    </SelectContent>
+                  </Select>
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="user">Team Member</Label>
-                <Select 
-                  value={newMember.user_id} 
-                  onValueChange={(value) => setNewMember(prev => ({ ...prev, user_id: value }))}
+              <div className="flex space-x-2">
+                <Button type="submit">Add Member</Button>
+                <Button 
+                  type="button" 
+                  variant="outline" 
+                  onClick={() => {
+                    setIsAdding(false);
+                    setFormData({ project_id: '', user_id: '', role: 'member' });
+                  }}
                 >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a user" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {profiles.filter(profile => profile.id && profile.id.trim() !== '').map((profile) => (
-                      <SelectItem key={profile.id} value={profile.id}>
-                        {profile.full_name || 'Unknown'} ({profile.department || 'No department'})
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="role">Role</Label>
-                <Select 
-                  value={newMember.role} 
-                  onValueChange={(value) => setNewMember(prev => ({ ...prev, role: value }))}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select a role" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="member">Member</SelectItem>
-                    <SelectItem value="lead">Lead</SelectItem>
-                    <SelectItem value="admin">Admin</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsCreating(false)}>
                   Cancel
                 </Button>
-                <Button type="submit" className="bg-gradient-to-r from-green-600 to-blue-600">
-                  Add Member
-                </Button>
-              </DialogFooter>
+              </div>
             </form>
-          </DialogContent>
-        </Dialog>
-      </div>
-
-      {/* Search and Filter Controls */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Search by name, department, or project..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <Select value={projectFilter} onValueChange={setProjectFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filter by project" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Projects</SelectItem>
-            {projects.map((project) => (
-              <SelectItem key={project.id} value={project.id}>
-                {project.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        <Select value={roleFilter} onValueChange={setRoleFilter}>
-          <SelectTrigger className="w-40">
-            <SelectValue placeholder="Filter by role" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Roles</SelectItem>
-            <SelectItem value="member">Member</SelectItem>
-            <SelectItem value="lead">Lead</SelectItem>
-            <SelectItem value="admin">Admin</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredMembers.map((member) => (
-          <Card key={member.id} className="hover:shadow-lg transition-shadow">
-            <CardHeader>
-              <div className="flex items-center justify-between">
-                <CardTitle className="text-lg flex items-center">
-                  <Users className="mr-2 h-5 w-5" />
-                  {member.profiles?.full_name || 'Unknown User'}
-                </CardTitle>
-                <Badge className={getRoleColor(member.role)}>
-                  {member.role}
-                </Badge>
-              </div>
-              <CardDescription>
-                {member.projects?.name || 'Unknown Project'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="text-sm text-gray-600">
-                <p><strong>Department:</strong> {member.profiles?.department || 'Not specified'}</p>
-                <p><strong>Added:</strong> {new Date(member.created_at).toLocaleDateString()}</p>
-              </div>
-              
-              <div className="flex space-x-2">
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  onClick={() => removeTeamMember(member.id)}
-                >
-                  <Trash2 className="h-4 w-4 mr-2" />
-                  Remove
-                </Button>
-              </div>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
-
-      {filteredMembers.length === 0 && !isCreating && (
-        <div className="text-center py-12">
-          <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
-            <Users className="h-8 w-8 text-gray-400" />
-          </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm || projectFilter !== 'all' || roleFilter !== 'all' ? 'No matching team members' : 'No team members yet'}
-          </h3>
-          <p className="text-gray-600 mb-4">
-            {searchTerm || projectFilter !== 'all' || roleFilter !== 'all'
-              ? 'Try adjusting your search criteria'
-              : 'Add team members to get started'
-            }
-          </p>
-          {!searchTerm && projectFilter === 'all' && roleFilter === 'all' && (
-            <Button 
-              onClick={() => setIsCreating(true)}
-              className="bg-gradient-to-r from-green-600 to-blue-600"
-            >
-              <UserPlus className="mr-2 h-4 w-4" />
-              Add Team Member
-            </Button>
-          )}
-        </div>
+          </CardContent>
+        </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2">
+            <Users className="h-5 w-5" />
+            <span>Current Project Team Assignments</span>
+          </CardTitle>
+          <CardDescription>Active team member assignments across projects</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Project Name</TableHead>
+                <TableHead>Team Member</TableHead>
+                <TableHead>Role</TableHead>
+                <TableHead>Assigned Date</TableHead>
+                <TableHead>Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {teams.map((team) => (
+                <TableRow key={team.id}>
+                  <TableCell className="font-medium">
+                    <div className="flex items-center space-x-2">
+                      <span>{team.projects?.name || team.project_id}</span>
+                      <Button 
+                        variant="ghost" 
+                        size="sm"
+                        onClick={() => handleViewProject(team.project_id)}
+                        className="h-6 w-6 p-0"
+                      >
+                        <Eye className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  </TableCell>
+                  <TableCell>{team.profiles?.full_name || 'Unnamed User'}</TableCell>
+                  <TableCell>
+                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                      team.role === 'admin' ? 'bg-red-100 text-red-800' :
+                      team.role === 'project_admin' ? 'bg-purple-100 text-purple-800' :
+                      team.role === 'lead' ? 'bg-blue-100 text-blue-800' :
+                      'bg-gray-100 text-gray-800'
+                    }`}>
+                      {team.role}
+                    </span>
+                  </TableCell>
+                  <TableCell>{new Date(team.created_at).toLocaleDateString()}</TableCell>
+                  <TableCell>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleRemove(team.id)}
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {teams.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                    No team assignments found. Add some team members to get started.
+                  </TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+
+      <ProjectDetailsModal
+        project={selectedProject}
+        isOpen={projectModalOpen}
+        onClose={() => {
+          setProjectModalOpen(false);
+          setSelectedProject(null);
+        }}
+      />
     </div>
   );
 };

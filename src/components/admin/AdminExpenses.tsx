@@ -7,7 +7,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { useAuth } from '@/hooks/useAuth';
 import { Check, X, DollarSign } from 'lucide-react';
 
 interface Expense {
@@ -32,20 +31,12 @@ export const AdminExpenses = () => {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
   const { toast } = useToast();
-  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    if (!authLoading && user) {
-      fetchExpenses();
-    }
-  }, [user, authLoading]);
+    fetchExpenses();
+  }, []);
 
   const fetchExpenses = async () => {
-    if (!user) {
-      console.error('No user found');
-      return;
-    }
-
     try {
       // First get expenses with projects
       const { data: expensesData, error: expensesError } = await supabase
@@ -89,8 +80,6 @@ export const AdminExpenses = () => {
   };
 
   const updateExpenseStatus = async (id: string, status: string) => {
-    if (!user) return;
-
     try {
       const { error } = await supabase
         .from('expenses')
@@ -128,31 +117,10 @@ export const AdminExpenses = () => {
     statusFilter === 'all' || expense.status === statusFilter
   );
 
-  // Show loading if auth is still loading
-  if (authLoading) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
-      </div>
-    );
-  }
-
-  // Show error if no user
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Authentication Required</h2>
-          <p className="text-gray-600">Please log in to access admin expenses.</p>
-        </div>
-      </div>
-    );
-  }
-
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -266,7 +234,6 @@ export const AdminExpenses = () => {
                           variant="outline"
                           size="sm"
                           onClick={() => updateExpenseStatus(expense.id, 'approved')}
-                          className="text-green-600 hover:text-green-700"
                         >
                           <Check className="h-4 w-4" />
                         </Button>

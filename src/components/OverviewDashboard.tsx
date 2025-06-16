@@ -1,20 +1,16 @@
+
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { TrendingUp, TrendingDown, DollarSign, AlertTriangle, CheckCircle, Settings } from "lucide-react";
+import { TrendingUp, TrendingDown, DollarSign, AlertTriangle, CheckCircle } from "lucide-react";
 import { BudgetChart } from "@/components/BudgetChart";
 import { EnhancedBudgetChart } from "@/components/EnhancedBudgetChart";
 import { DashboardMetrics } from "@/components/DashboardMetrics";
 import { ProjectFilter } from "@/components/ProjectFilter";
 import { RecentActivity } from "@/components/RecentActivity";
-import { ProjectDisplayControls } from "@/components/ProjectDisplayControls";
-import { ProjectGridView } from "@/components/ProjectGridView";
-import { ProjectListView } from "@/components/ProjectListView";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useState, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
-import { useNavigate } from "react-router-dom";
 
 interface Project {
   id: string;
@@ -33,13 +29,9 @@ interface Team {
 
 export function OverviewDashboard() {
   const { formatCurrency } = useCurrency();
-  const { user } = useAuth();
-  const navigate = useNavigate();
   const [projects, setProjects] = useState<Project[]>([]);
   const [teams, setTeams] = useState<Team[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
-  const [showMore, setShowMore] = useState(false);
   
   // Filter states
   const [searchTerm, setSearchTerm] = useState('');
@@ -101,35 +93,19 @@ export function OverviewDashboard() {
     return matchesSearch && matchesStatus && matchesYear && matchesTeam;
   });
 
-  const displayedProjects = showMore ? filteredProjects : filteredProjects.slice(0, 9);
-
-  const handleAdminAccess = () => {
-    // Check if user email is admin@gmail.com
-    if (user?.email === 'admin@gmail.com') {
-      navigate('/admin');
-    } else {
-      // Show a message that admin access is restricted
-      alert('Admin access is restricted to admin@gmail.com');
-    }
-  };
-
   return (
     <div className="p-6 space-y-6">
       {/* Welcome Section */}
       <div className="bg-gradient-to-r from-orange-500 to-orange-600 rounded-xl p-6 text-white dark:from-orange-600 dark:to-orange-700">
-        <div className="flex justify-between items-start">
-          <div>
-            <h1 className="text-3xl font-bold mb-2">Welcome to Frontieri PBMS</h1>
-            <p className="text-orange-100 text-lg">
-              Project Budget Management System - Your centralized financial control center
-            </p>
-            <div className="mt-4 p-3 bg-white/10 rounded-lg">
-              <p className="text-sm text-orange-100 mb-2">🔐 <strong>Admin Access:</strong></p>
-              <p className="text-xs text-orange-200">
-                Create an account with email: <code className="bg-white/20 px-1 rounded">admin@gmail.com</code> and password: <code className="bg-white/20 px-1 rounded">1234567890</code> to access the Admin Dashboard
-              </p>
-            </div>
-          </div>
+        <h1 className="text-3xl font-bold mb-2">Welcome to Frontieri PBMS</h1>
+        <p className="text-orange-100 text-lg">
+          Project Budget Management System - Your centralized financial control center
+        </p>
+        <div className="mt-4 p-3 bg-white/10 rounded-lg">
+          <p className="text-sm text-orange-100 mb-2">🔐 <strong>Admin Access:</strong></p>
+          <p className="text-xs text-orange-200">
+            Create an account with email: <code className="bg-white/20 px-1 rounded">admin@gmail.com</code> and password: <code className="bg-white/20 px-1 rounded">1234567890</code> to access the Admin Dashboard
+          </p>
         </div>
       </div>
 
@@ -181,25 +157,57 @@ export function OverviewDashboard() {
             </div>
           ) : (
             <div className="space-y-4">
-              <ProjectDisplayControls
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-                showMore={showMore}
-                onShowMoreToggle={() => setShowMore(!showMore)}
-                totalProjects={filteredProjects.length}
-                displayedProjects={displayedProjects.length}
-              />
-              
-              {viewMode === 'grid' ? (
-                <ProjectGridView projects={displayedProjects} />
-              ) : (
-                <ProjectListView projects={displayedProjects} />
-              )}
-              
-              {!showMore && filteredProjects.length > 9 && (
+              {filteredProjects.slice(0, 6).map((project, index) => {
+                const budget = project.total_budget || 0;
+                const spent = project.spent_budget || 0;
+                const utilization = budget > 0 ? (spent / budget) * 100 : 0;
+                
+                const getStatusColor = (status: string) => {
+                  switch (status) {
+                    case "active": return "text-green-600";
+                    case "completed": return "text-blue-600";
+                    case "on-hold": return "text-yellow-600";
+                    case "cancelled": return "text-red-600";
+                    default: return "text-gray-600";
+                  }
+                };
+                
+                const getStatusIcon = (status: string) => {
+                  switch (status) {
+                    case "active": return <CheckCircle className="h-4 w-4 text-green-600" />;
+                    case "completed": return <CheckCircle className="h-4 w-4 text-blue-600" />;
+                    case "on-hold": return <AlertTriangle className="h-4 w-4 text-yellow-600" />;
+                    case "cancelled": return <AlertTriangle className="h-4 w-4 text-red-600" />;
+                    default: return null;
+                  }
+                };
+
+                return (
+                  <div key={index} className="p-4 rounded-lg bg-muted hover:bg-muted/80 transition-colors duration-200">
+                    <div className="flex items-center justify-between mb-2">
+                      <div className="flex items-center space-x-2">
+                        <h4 className="font-medium">{project.name}</h4>
+                        {getStatusIcon(project.status)}
+                      </div>
+                      <Badge variant="outline" className={getStatusColor(project.status)}>
+                        {project.status.replace("-", " ").toUpperCase()}
+                      </Badge>
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm text-muted-foreground">
+                        <span>Budget: {formatCurrency(budget)}</span>
+                        <span>Spent: {formatCurrency(spent)}</span>
+                      </div>
+                      <Progress value={utilization} className="h-2" />
+                      <p className="text-xs text-muted-foreground">{utilization.toFixed(1)}% utilized</p>
+                    </div>
+                  </div>
+                );
+              })}
+              {filteredProjects.length > 6 && (
                 <div className="text-center p-4">
                   <p className="text-sm text-muted-foreground">
-                    Showing 9 of {filteredProjects.length} filtered projects
+                    Showing 6 of {filteredProjects.length} filtered projects
                   </p>
                 </div>
               )}

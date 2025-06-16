@@ -34,66 +34,50 @@ const ProfileManagement = () => {
 
   const fetchProfile = async () => {
     try {
-      console.log('Fetching profile for user:', user?.id);
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', user?.id)
-        .maybeSingle();
+        .single();
 
       if (error && error.code !== 'PGRST116') {
         throw error;
       }
 
       if (data) {
+        // Ensure all required fields are present
         const profileData: Profile = {
           id: data.id,
-          full_name: data.full_name || user?.full_name || user?.email?.split('@')[0] || 'User',
-          department: data.department || user?.department || 'General',
-          role: userRole || data.role || 'user'
+          full_name: data.full_name || '',
+          department: data.department || '',
+          role: userRole || 'user'
         };
         setProfile(profileData);
         setEditedProfile(profileData);
-      } else if (user) {
-        // No profile row, create new profile using user fields
+      } else {
+        // Create profile if it doesn't exist
         const newProfile: Profile = {
-          id: user.id,
-          full_name: user.full_name || user.email?.split('@')[0] || 'User',
-          department: user.department || 'General',
-          role: userRole || (user.email === 'admin@gmail.com' ? 'admin' : 'user')
+          id: user?.id || '',
+          full_name: user?.user_metadata?.full_name || user?.full_name || '',
+          department: user?.user_metadata?.department || user?.department || '',
+          role: userRole || 'user'
         };
-
-        // Insert minimal profile
+        
         const { error: insertError } = await supabase
           .from('profiles')
           .insert([newProfile]);
 
-        if (insertError) {
-          console.error('Error creating profile:', insertError);
-        } else {
-          console.log('Profile created successfully');
-        }
-
+        if (insertError) throw insertError;
+        
         setProfile(newProfile);
         setEditedProfile(newProfile);
       }
     } catch (error) {
       console.error('Error fetching profile:', error);
-      // Create a fallback profile if everything fails
-      if (user) {
-        const fallbackProfile: Profile = {
-          id: user.id,
-          full_name: user.email?.split('@')[0] || 'User',
-          department: 'General',
-          role: user.email === 'admin@gmail.com' ? 'admin' : 'user'
-        };
-        setProfile(fallbackProfile);
-        setEditedProfile(fallbackProfile);
-      }
-      
       toast({
-        title: "Info",
-        description: "Using default profile data. You can edit and save your information."
+        title: "Error",
+        description: "Failed to load profile",
+        variant: "destructive"
       });
     } finally {
       setLoading(false);
@@ -104,16 +88,14 @@ const ProfileManagement = () => {
     try {
       const { error } = await supabase
         .from('profiles')
-        .upsert({
-          id: user?.id,
-          ...editedProfile
-        });
+        .update(editedProfile)
+        .eq('id', user?.id);
 
       if (error) throw error;
 
       setProfile({ ...profile, ...editedProfile } as Profile);
       setIsEditing(false);
-
+      
       toast({
         title: "Success",
         description: "Profile updated successfully"
@@ -224,7 +206,7 @@ const ProfileManagement = () => {
               <Label htmlFor="role">Role</Label>
               <Input
                 id="role"
-                value={userRole || profile?.role || 'user'}
+                value={userRole || 'user'}
                 disabled
                 className="bg-gray-50"
               />

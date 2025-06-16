@@ -10,7 +10,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { Plus, Edit, Trash2, DollarSign, Calendar, Search } from 'lucide-react';
+import { Plus, Edit, Trash2, DollarSign, Calendar } from 'lucide-react';
 
 interface Expense {
   id: string;
@@ -37,13 +37,10 @@ interface BudgetCategory {
 
 const ExpenseManagement = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
-  const [filteredExpenses, setFilteredExpenses] = useState<Expense[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<BudgetCategory[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
   const [newExpense, setNewExpense] = useState({
     amount: '',
     description: '',
@@ -57,28 +54,6 @@ const ExpenseManagement = () => {
   useEffect(() => {
     fetchData();
   }, []);
-
-  useEffect(() => {
-    filterExpenses();
-  }, [expenses, searchTerm, statusFilter]);
-
-  const filterExpenses = () => {
-    let filtered = expenses;
-
-    if (searchTerm) {
-      filtered = filtered.filter(expense =>
-        expense.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        expense.projects?.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        expense.budget_categories?.name.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(expense => expense.status === statusFilter);
-    }
-
-    setFilteredExpenses(filtered);
-  };
 
   const fetchData = async () => {
     await Promise.all([fetchExpenses(), fetchProjects()]);
@@ -213,35 +188,11 @@ const ExpenseManagement = () => {
         </div>
         <Button 
           onClick={() => setIsCreating(true)}
-          className="bg-gradient-to-r from-orange-600 to-red-600"
+          className="bg-gradient-to-r from-blue-600 to-purple-600"
         >
           <Plus className="mr-2 h-4 w-4" />
           Add Expense
         </Button>
-      </div>
-
-      {/* Search and Filter Controls */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Search expenses by description, project, or category..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="pending">Pending</SelectItem>
-            <SelectItem value="approved">Approved</SelectItem>
-            <SelectItem value="rejected">Rejected</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {isCreating && (
@@ -266,7 +217,7 @@ const ExpenseManagement = () => {
                       <SelectValue placeholder="Select a project" />
                     </SelectTrigger>
                     <SelectContent>
-                      {projects.filter(project => project.id && project.id.trim() !== '').map((project) => (
+                      {projects.map((project) => (
                         <SelectItem key={project.id} value={project.id}>
                           {project.name}
                         </SelectItem>
@@ -286,7 +237,7 @@ const ExpenseManagement = () => {
                       <SelectValue placeholder="Select a category" />
                     </SelectTrigger>
                     <SelectContent>
-                      {categories.filter(category => category.id && category.id.trim() !== '').map((category) => (
+                      {categories.map((category) => (
                         <SelectItem key={category.id} value={category.id}>
                           {category.name}
                         </SelectItem>
@@ -330,7 +281,7 @@ const ExpenseManagement = () => {
               </div>
 
               <div className="flex space-x-2">
-                <Button type="submit" className="bg-gradient-to-r from-orange-600 to-red-600">
+                <Button type="submit" className="bg-gradient-to-r from-blue-600 to-purple-600">
                   Create Expense
                 </Button>
                 <Button type="button" variant="outline" onClick={() => setIsCreating(false)}>
@@ -343,7 +294,7 @@ const ExpenseManagement = () => {
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-        {filteredExpenses.map((expense) => (
+        {expenses.map((expense) => (
           <Card key={expense.id} className="hover:shadow-lg transition-shadow">
             <CardHeader>
               <div className="flex items-center justify-between">
@@ -379,29 +330,20 @@ const ExpenseManagement = () => {
         ))}
       </div>
 
-      {filteredExpenses.length === 0 && !isCreating && (
+      {expenses.length === 0 && !isCreating && (
         <div className="text-center py-12">
           <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
             <DollarSign className="h-8 w-8 text-gray-400" />
           </div>
-          <h3 className="text-lg font-medium text-gray-900 mb-2">
-            {searchTerm || statusFilter !== 'all' ? 'No matching expenses' : 'No expenses yet'}
-          </h3>
-          <p className="text-gray-600 mb-4">
-            {searchTerm || statusFilter !== 'all'
-              ? 'Try adjusting your search criteria'
-              : 'Add your first expense to get started'
-            }
-          </p>
-          {!searchTerm && statusFilter === 'all' && (
-            <Button 
-              onClick={() => setIsCreating(true)}
-              className="bg-gradient-to-r from-blue-600 to-purple-600"
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add Expense
-            </Button>
-          )}
+          <h3 className="text-lg font-medium text-gray-900 mb-2">No expenses yet</h3>
+          <p className="text-gray-600 mb-4">Add your first expense to get started</p>
+          <Button 
+            onClick={() => setIsCreating(true)}
+            className="bg-gradient-to-r from-blue-600 to-purple-600"
+          >
+            <Plus className="mr-2 h-4 w-4" />
+            Add Expense
+          </Button>
         </div>
       )}
     </div>

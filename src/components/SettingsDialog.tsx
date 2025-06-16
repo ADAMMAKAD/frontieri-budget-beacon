@@ -10,8 +10,6 @@ import { Switch } from '@/components/ui/switch';
 import { Settings, User, Palette, Bell, Globe, Shield } from 'lucide-react';
 import { useTheme } from '@/contexts/ThemeContext';
 import { useCurrency } from '@/contexts/CurrencyContext';
-import { PasswordChangeDialog } from './PasswordChangeDialog';
-import { TwoFactorDialog } from './TwoFactorDialog';
 import ProfileManagement from './ProfileManagement';
 import ExpenseManagement from './ExpenseManagement';
 
@@ -198,7 +196,9 @@ export function SettingsDialog() {
               <CardContent className="space-y-4">
                 <div className="space-y-2">
                   <Label>Password</Label>
-                  <PasswordChangeDialog />
+                  <Button variant="outline" className="w-full">
+                    Change Password
+                  </Button>
                 </div>
                 
                 <div className="space-y-2">
@@ -207,7 +207,9 @@ export function SettingsDialog() {
                     <span className="text-sm text-muted-foreground">
                       Add an extra layer of security to your account
                     </span>
-                    <TwoFactorDialog />
+                    <Button variant="outline" size="sm">
+                      Enable 2FA
+                    </Button>
                   </div>
                 </div>
 

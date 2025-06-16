@@ -13,7 +13,6 @@ import { useCurrency } from '@/contexts/CurrencyContext';
 import { supabase } from '@/integrations/supabase/client';
 import { Plus, DollarSign, TrendingUp, AlertTriangle, Settings } from 'lucide-react';
 import { BudgetStatusIndicator } from '@/components/BudgetStatusIndicator';
-import { useAuth } from '@/hooks/useAuth';
 
 interface Project {
   id: string;
@@ -38,7 +37,7 @@ export const BudgetPlanning = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [categories, setCategories] = useState<BudgetCategory[]>([]);
   const [selectedProject, setSelectedProject] = useState<string>('');
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [thresholdDialogOpen, setThresholdDialogOpen] = useState(false);
   const [categoryData, setCategoryData] = useState({
@@ -52,47 +51,23 @@ export const BudgetPlanning = () => {
   });
   const { formatCurrency } = useCurrency();
   const { toast } = useToast();
-  const { user, loading: authLoading } = useAuth();
 
   useEffect(() => {
-    if (!authLoading && user) {
-      fetchData();
-    }
-  }, [user, authLoading]);
+    fetchData();
+  }, []);
 
   const fetchData = async () => {
-    if (!user) return;
-
     try {
-      setLoading(true);
-      
       const [projectsResult, categoriesResult] = await Promise.all([
         supabase.from('projects').select('*').order('name'),
         supabase.from('budget_categories').select('*').order('name')
       ]);
 
-      if (projectsResult.error) {
-        console.error('Projects error:', projectsResult.error);
-        toast({
-          title: "Error",
-          description: "Failed to load projects",
-          variant: "destructive"
-        });
-      } else {
-        const validProjects = (projectsResult.data || []).filter(p => p.id && p.id.trim() !== '');
-        setProjects(validProjects);
-      }
+      if (projectsResult.error) throw projectsResult.error;
+      if (categoriesResult.error) throw categoriesResult.error;
 
-      if (categoriesResult.error) {
-        console.error('Categories error:', categoriesResult.error);
-        toast({
-          title: "Error",
-          description: "Failed to load categories",
-          variant: "destructive"
-        });
-      } else {
-        setCategories(categoriesResult.data || []);
-      }
+      setProjects(projectsResult.data || []);
+      setCategories(categoriesResult.data || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -106,33 +81,10 @@ export const BudgetPlanning = () => {
   };
 
   const handleCreateCategory = async () => {
-    if (!user) {
-      toast({
-        title: "Error",
-        description: "You must be logged in to create categories",
-        variant: "destructive"
-      });
-      return;
-    }
-
-    if (!categoryData.name || !categoryData.project_id || categoryData.allocated_amount <= 0) {
-      toast({
-        title: "Error",
-        description: "Please fill all fields with valid data",
-        variant: "destructive"
-      });
-      return;
-    }
-
     try {
       const { error } = await supabase
         .from('budget_categories')
-        .insert([{
-          name: categoryData.name,
-          allocated_amount: categoryData.allocated_amount,
-          project_id: categoryData.project_id,
-          spent_amount: 0
-        }]);
+        .insert([categoryData]);
 
       if (error) throw error;
 
@@ -162,21 +114,10 @@ export const BudgetPlanning = () => {
     return projects.find(p => p.id === selectedProject);
   };
 
-  if (authLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <div className="text-center">
-          <h2 className="text-xl font-semibold text-gray-900 mb-2">Authentication Required</h2>
-          <p className="text-gray-600">Please log in to access budget planning.</p>
-        </div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -243,7 +184,7 @@ export const BudgetPlanning = () => {
 
           <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
             <DialogTrigger asChild>
-              <Button className="bg-orange-600 hover:bg-orange-700">
+              <Button>
                 <Plus className="mr-2 h-4 w-4" />
                 Add Category
               </Button>
@@ -298,7 +239,7 @@ export const BudgetPlanning = () => {
                 <Button variant="outline" onClick={() => setDialogOpen(false)}>
                   Cancel
                 </Button>
-                <Button onClick={handleCreateCategory} className="bg-orange-600 hover:bg-orange-700">
+                <Button onClick={handleCreateCategory}>
                   Create Category
                 </Button>
               </DialogFooter>
@@ -357,7 +298,7 @@ export const BudgetPlanning = () => {
                     </div>
                     <div className="space-y-2">
                       <p className="text-sm font-medium text-muted-foreground">Remaining</p>
-                      <p className="text-2xl font-bold text-orange-600">
+                      <p className="text-2xl font-bold text-blue-600">
                         {formatCurrency(projectData.total_budget - projectData.spent_budget)}
                       </p>
                     </div>
@@ -382,7 +323,7 @@ export const BudgetPlanning = () => {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center space-x-2">
-            <TrendingUp className="h-5 w-5 text-orange-600" />
+            <TrendingUp className="h-5 w-5 text-blue-600" />
             <span>Budget Categories</span>
           </CardTitle>
           <CardDescription>
@@ -393,11 +334,7 @@ export const BudgetPlanning = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          {loading ? (
-            <div className="flex items-center justify-center p-8">
-              <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
-            </div>
-          ) : filteredCategories.length === 0 ? (
+          {filteredCategories.length === 0 ? (
             <div className="text-center p-8 text-muted-foreground">
               <p>No budget categories found.</p>
               <p className="text-sm">Create your first category to get started.</p>

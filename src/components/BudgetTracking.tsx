@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -195,9 +196,6 @@ const BudgetTracking = () => {
   const totalSpent = categories.reduce((sum, cat) => sum + cat.spent_amount, 0);
   const totalAllocated = categories.reduce((sum, cat) => sum + cat.allocated_amount, 0);
 
-  // Filter projects to ensure no empty IDs
-  const validProjects = projects.filter(project => project.id && project.id.trim() !== '');
-
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
@@ -207,7 +205,7 @@ const BudgetTracking = () => {
         </div>
         <Button 
           onClick={() => setIsCreating(true)}
-          className="bg-orange-600 hover:bg-orange-700"
+          className="bg-gradient-to-r from-blue-600 to-purple-600"
           disabled={!selectedProject}
         >
           <Plus className="mr-2 h-4 w-4" />
@@ -226,7 +224,7 @@ const BudgetTracking = () => {
               <SelectValue placeholder="Select a project" />
             </SelectTrigger>
             <SelectContent>
-              {validProjects.map((project) => (
+              {projects.map((project) => (
                 <SelectItem key={project.id} value={project.id}>
                   {project.name}
                 </SelectItem>
@@ -322,7 +320,7 @@ const BudgetTracking = () => {
                 </div>
               </div>
               <div className="flex space-x-2">
-                <Button type="submit" className="bg-orange-600 hover:bg-orange-700">
+                <Button type="submit" className="bg-gradient-to-r from-blue-600 to-purple-600">
                   Record Expense
                 </Button>
                 <Button type="button" variant="outline" onClick={() => setIsCreating(false)}>
@@ -377,7 +375,7 @@ const BudgetTracking = () => {
           <p className="text-gray-600 mb-4">Start tracking expenses for this project</p>
           <Button 
             onClick={() => setIsCreating(true)}
-            className="bg-orange-600 hover:bg-orange-700"
+            className="bg-gradient-to-r from-blue-600 to-purple-600"
           >
             <Plus className="mr-2 h-4 w-4" />
             Add Expense
