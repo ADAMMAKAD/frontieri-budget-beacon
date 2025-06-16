@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,11 +39,16 @@ interface Project {
   created_at: string;
 }
 
+interface UserProfile {
+  id: string;
+  full_name: string | null;
+}
+
 const ProjectTeamManagement = () => {
   const [teams, setTeams] = useState<ProjectTeam[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
   const [allProjects, setAllProjects] = useState<Project[]>([]);
-  const [availableUsers, setAvailableUsers] = useState<{id: string, full_name: string | null}[]>([]);
+  const [availableUsers, setAvailableUsers] = useState<UserProfile[]>([]);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
   const [projectModalOpen, setProjectModalOpen] = useState(false);
   const [isAdding, setIsAdding] = useState(false);
@@ -63,19 +69,12 @@ const ProjectTeamManagement = () => {
   const fetchData = async () => {
     try {
       console.log('Fetching project teams data...');
+      setLoading(true);
       
-      // Fetch teams with proper joins
+      // Fetch teams with simplified query first
       const { data: teamsData, error: teamsError } = await supabase
         .from('project_teams')
-        .select(`
-          id,
-          project_id,
-          user_id,
-          role,
-          created_at,
-          projects!inner(name),
-          profiles!inner(full_name)
-        `)
+        .select('*')
         .order('created_at', { ascending: false });
 
       if (teamsError) {
@@ -83,9 +82,9 @@ const ProjectTeamManagement = () => {
         throw teamsError;
       }
 
-      console.log('Teams data fetched:', teamsData);
+      console.log('Raw teams data:', teamsData);
 
-      // Fetch projects for access control
+      // Fetch projects
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
         .select('*')
@@ -96,7 +95,7 @@ const ProjectTeamManagement = () => {
         throw projectsError;
       }
 
-      // Fetch user profiles for dropdown
+      // Fetch user profiles
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('id, full_name')
@@ -107,12 +106,26 @@ const ProjectTeamManagement = () => {
         throw profilesError;
       }
 
+      // Transform teams data to include related data
+      const enrichedTeams: ProjectTeam[] = (teamsData || []).map(team => {
+        const project = projectsData?.find(p => p.id === team.project_id);
+        const profile = profilesData?.find(p => p.id === team.user_id);
+        
+        return {
+          ...team,
+          projects: project ? { name: project.name } : undefined,
+          profiles: profile ? { full_name: profile.full_name } : undefined
+        };
+      });
+
+      console.log('Enriched teams data:', enrichedTeams);
+
       // Filter projects based on user access
       const accessibleProjects = projectsData?.filter(project => 
         canAccessProject(project.team_id, project.project_manager_id)
       ) || [];
 
-      setTeams(teamsData || []);
+      setTeams(enrichedTeams);
       setProjects(accessibleProjects);
       setAllProjects(projectsData || []);
       setAvailableUsers(profilesData || []);
@@ -132,6 +145,8 @@ const ProjectTeamManagement = () => {
     e.preventDefault();
     
     try {
+      console.log('Adding team member:', formData);
+      
       const { error } = await supabase
         .from('project_teams')
         .insert([{
@@ -140,7 +155,10 @@ const ProjectTeamManagement = () => {
           role: formData.role
         }]);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Insert error:', error);
+        throw error;
+      }
       
       toast({
         title: "Success",
@@ -164,12 +182,17 @@ const ProjectTeamManagement = () => {
     if (!confirm('Are you sure you want to remove this team member?')) return;
 
     try {
+      console.log('Removing team member:', id);
+      
       const { error } = await supabase
         .from('project_teams')
         .delete()
         .eq('id', id);
 
-      if (error) throw error;
+      if (error) {
+        console.error('Delete error:', error);
+        throw error;
+      }
       
       toast({
         title: "Success",
@@ -349,7 +372,7 @@ const ProjectTeamManagement = () => {
                 <TableRow key={team.id}>
                   <TableCell className="font-medium">
                     <div className="flex items-center space-x-2">
-                      <span>{team.projects?.name || team.project_id}</span>
+                      <span>{team.projects?.name || 'Unknown Project'}</span>
                       <Button 
                         variant="ghost" 
                         size="sm"
@@ -360,7 +383,7 @@ const ProjectTeamManagement = () => {
                       </Button>
                     </div>
                   </TableCell>
-                  <TableCell>{team.profiles?.full_name || 'Unnamed User'}</TableCell>
+                  <TableCell>{team.profiles?.full_name || 'Unknown User'}</TableCell>
                   <TableCell>
                     <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                       team.role === 'admin' ? 'bg-red-100 text-red-800' :
