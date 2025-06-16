@@ -62,6 +62,8 @@ const ProjectTeamManagement = () => {
 
   const fetchData = async () => {
     try {
+      console.log('Fetching project teams data...');
+      
       // Fetch teams with proper joins
       const { data: teamsData, error: teamsError } = await supabase
         .from('project_teams')
@@ -70,84 +72,50 @@ const ProjectTeamManagement = () => {
           project_id,
           user_id,
           role,
-          created_at
+          created_at,
+          projects!inner(name),
+          profiles!inner(full_name)
         `)
         .order('created_at', { ascending: false });
 
-      if (teamsError) throw teamsError;
+      if (teamsError) {
+        console.error('Teams query error:', teamsError);
+        throw teamsError;
+      }
 
-      // Fetch ALL projects with complete data for the dropdown
-      const { data: allProjectsData, error: allProjectsError } = await supabase
-        .from('projects')
-        .select(`
-          id,
-          name,
-          description,
-          status,
-          total_budget,
-          spent_budget,
-          allocated_budget,
-          start_date,
-          end_date,
-          department,
-          team_id,
-          project_manager_id,
-          created_at
-        `)
-        .order('name');
+      console.log('Teams data fetched:', teamsData);
 
-      if (allProjectsError) throw allProjectsError;
-
-      // Fetch project names separately for access-controlled view
+      // Fetch projects for access control
       const { data: projectsData, error: projectsError } = await supabase
         .from('projects')
-        .select(`
-          id,
-          name,
-          description,
-          status,
-          total_budget,
-          spent_budget,
-          allocated_budget,
-          start_date,
-          end_date,
-          department,
-          team_id,
-          project_manager_id,
-          created_at
-        `)
+        .select('*')
         .order('name');
 
-      if (projectsError) throw projectsError;
+      if (projectsError) {
+        console.error('Projects query error:', projectsError);
+        throw projectsError;
+      }
 
-      // Fetch user profiles separately
+      // Fetch user profiles for dropdown
       const { data: profilesData, error: profilesError } = await supabase
         .from('profiles')
         .select('id, full_name')
         .order('full_name');
 
-      if (profilesError) throw profilesError;
+      if (profilesError) {
+        console.error('Profiles query error:', profilesError);
+        throw profilesError;
+      }
 
-      // Create lookup maps
-      const projectsMap = new Map(projectsData.map(p => [p.id, p]));
-      const profilesMap = new Map(profilesData.map(p => [p.id, p]));
-
-      // Combine the data
-      const teamsWithDetails = teamsData.map(team => ({
-        ...team,
-        projects: projectsMap.get(team.project_id) ? { name: projectsMap.get(team.project_id)!.name } : undefined,
-        profiles: profilesMap.get(team.user_id) ? { full_name: profilesMap.get(team.user_id)!.full_name } : undefined
-      }));
-
-      // Filter projects based on user access for viewing
-      const accessibleProjects = projectsData.filter(project => 
+      // Filter projects based on user access
+      const accessibleProjects = projectsData?.filter(project => 
         canAccessProject(project.team_id, project.project_manager_id)
-      );
+      ) || [];
 
-      setTeams(teamsWithDetails);
+      setTeams(teamsData || []);
       setProjects(accessibleProjects);
-      setAllProjects(allProjectsData || []); // Store all projects for dropdown
-      setAvailableUsers(profilesData);
+      setAllProjects(projectsData || []);
+      setAvailableUsers(profilesData || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
