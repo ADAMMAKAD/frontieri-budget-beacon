@@ -19,8 +19,7 @@ export const useRole = () => {
       setUserRole(role);
       setIsAdmin(isAdminEmail || user.role === 'admin');
       setIsProjectAdmin(isAdminEmail || user.role === 'project_admin' || user.role === 'admin');
-      // Remove team_id reference since it's not in our User interface
-      setUserTeamId(null);
+      setUserTeamId(user.team_id || null);
       setLoading(false);
     } else {
       setUserRole(null);
@@ -38,7 +37,7 @@ export const useRole = () => {
   const canAccessProject = (projectTeamId?: string | null, projectManagerId?: string | null) => {
     if (isAdmin) return true;
     if (projectManagerId === user?.id) return true;
-    // Simplified access control since we don't have team_id in User interface
+    if (userTeamId && projectTeamId === userTeamId) return true;
     return false;
   };
 

@@ -1,5 +1,6 @@
 
 import React, { useState, useEffect, createContext, useContext } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 
 interface User {
   id: string;
@@ -7,6 +8,7 @@ interface User {
   full_name?: string;
   department?: string;
   role?: string;
+  team_id?: string;
 }
 
 interface AuthContextType {
@@ -19,42 +21,62 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
-const API_BASE_URL = 'http://localhost:3001/api';
-
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check for existing token on app load
-    const token = localStorage.getItem('token');
-    if (token) {
-      fetchCurrentUser(token);
-    } else {
+    // Setup Supabase auth listener
+    const authResponse = supabase.auth.onAuthStateChange((_event, session) => {
+      if (session?.user) {
+        fetchProfile(session.user);
+      } else {
+        setUser(null);
+      }
       setLoading(false);
-    }
+    });
+
+    // Initial fetch
+    supabase.auth.getSession().then(({ data }) => {
+      const session = data.session;
+      if (session?.user) {
+        fetchProfile(session.user);
+      } else {
+        setUser(null);
+        setLoading(false);
+      }
+    });
+
+    return () => {
+      // Safely unsubscribe from auth changes
+      if (authResponse?.data?.subscription) {
+        authResponse.data.subscription.unsubscribe();
+      }
+    };
   }, []);
 
-  const fetchCurrentUser = async (token: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/me`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
+  // Pass the user record from auth (for email) and combine with profile
+  const fetchProfile = async (authUser: any) => {
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', authUser.id)
+      .maybeSingle();
 
-      if (response.ok) {
-        const data = await response.json();
-        setUser(data.user);
-      } else {
-        localStorage.removeItem('token');
-      }
-    } catch (error) {
-      console.error('Error fetching current user:', error);
-      localStorage.removeItem('token');
-    } finally {
-      setLoading(false);
+    if (data) {
+      setUser({
+        id: authUser.id,
+        email: authUser.email ?? '',
+        full_name: data.full_name ?? '',
+        department: data.department ?? '',
+        role: data.role ?? '',
+        team_id: data.team_id ?? '',
+      });
+    } else {
+      setUser({
+        id: authUser.id,
+        email: authUser.email ?? '',
+      });
     }
   };
 
@@ -65,63 +87,24 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     department: string,
     role?: string
   ) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/register`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          email,
-          password,
-          fullName,
-          department,
-          role: role || 'user'
-        })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        localStorage.setItem('token', data.token);
-        setUser(data.user);
-        return { error: null };
-      } else {
-        return { error: { message: data.error || 'Registration failed' } };
+    let { error } = await supabase.auth.signUp({
+      email,
+      password,
+      options: {
+        data: { full_name: fullName, department, role: role || 'user' },
+        emailRedirectTo: `${window.location.origin}/`
       }
-    } catch (error: any) {
-      console.error('Registration error:', error);
-      return { error: { message: error.message || 'Registration failed' } };
-    }
+    });
+    return { error };
   };
 
   const signIn = async (email: string, password: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/auth/login`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({ email, password })
-      });
-
-      const data = await response.json();
-
-      if (response.ok) {
-        localStorage.setItem('token', data.token);
-        setUser(data.user);
-        return { error: null };
-      } else {
-        return { error: { message: data.error || 'Login failed' } };
-      }
-    } catch (error: any) {
-      console.error('Login error:', error);
-      return { error: { message: error.message || 'Login failed' } };
-    }
+    let { error } = await supabase.auth.signInWithPassword({ email, password });
+    return { error };
   };
 
   const signOut = async () => {
-    localStorage.removeItem('token');
+    await supabase.auth.signOut();
     setUser(null);
   };
 

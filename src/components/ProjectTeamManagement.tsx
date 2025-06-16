@@ -1,5 +1,6 @@
 
 import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,10 +17,13 @@ interface TeamMember {
   project_id: string;
   role: string;
   created_at: string;
-  user_name?: string;
-  user_email?: string;
-  user_department?: string;
-  project_name?: string;
+  profiles: {
+    full_name: string;
+    department: string;
+  } | null;
+  projects: {
+    name: string;
+  } | null;
 }
 
 interface Project {
@@ -33,8 +37,6 @@ interface Profile {
   email: string;
   department: string;
 }
-
-const API_BASE_URL = 'http://localhost:3001/api';
 
 const ProjectTeamManagement = () => {
   const [teamMembers, setTeamMembers] = useState<TeamMember[]>([]);
@@ -53,14 +55,6 @@ const ProjectTeamManagement = () => {
   const { toast } = useToast();
   const { user } = useAuth();
 
-  const getAuthHeaders = () => {
-    const token = localStorage.getItem('token');
-    return {
-      'Content-Type': 'application/json',
-      ...(token && { 'Authorization': `Bearer ${token}` })
-    };
-  };
-
   useEffect(() => {
     fetchData();
   }, []);
@@ -69,15 +63,48 @@ const ProjectTeamManagement = () => {
     try {
       setLoading(true);
       
-      // For now, we'll create mock data since the backend team endpoints aren't implemented yet
-      // In a real implementation, you would fetch from your backend API
-      
-      // Mock data for demonstration
-      setTeamMembers([]);
-      setProjects([]);
-      setProfiles([]);
-      
-      console.log('Team management data loaded (currently mock data)');
+      // Fetch team members with manual joins
+      const { data: teamData, error: teamError } = await supabase
+        .from('project_teams')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (teamError) throw teamError;
+
+      // Fetch projects
+      const { data: projectsData, error: projectsError } = await supabase
+        .from('projects')
+        .select('id, name');
+
+      if (projectsError) throw projectsError;
+
+      // Fetch profiles
+      const { data: profilesData, error: profilesError } = await supabase
+        .from('profiles')
+        .select('id, full_name, email, department');
+
+      if (profilesError) throw profilesError;
+
+      // Manually join the data
+      const enrichedTeamData = teamData?.map(member => {
+        const profile = profilesData?.find(p => p.id === member.user_id);
+        const project = projectsData?.find(p => p.id === member.project_id);
+        
+        return {
+          ...member,
+          profiles: profile ? {
+            full_name: profile.full_name || 'Unknown',
+            department: profile.department || 'Unknown'
+          } : null,
+          projects: project ? {
+            name: project.name
+          } : null
+        };
+      }) || [];
+
+      setTeamMembers(enrichedTeamData);
+      setProjects(projectsData || []);
+      setProfiles(profilesData || []);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast({
@@ -101,8 +128,11 @@ const ProjectTeamManagement = () => {
         return;
       }
 
-      // This would be an API call to your backend
-      console.log('Adding team member:', newMember);
+      const { error } = await supabase
+        .from('project_teams')
+        .insert([newMember]);
+
+      if (error) throw error;
 
       toast({
         title: "Success",
@@ -126,8 +156,12 @@ const ProjectTeamManagement = () => {
     if (!confirm('Are you sure you want to remove this team member?')) return;
 
     try {
-      // This would be an API call to your backend
-      console.log('Removing team member:', id);
+      const { error } = await supabase
+        .from('project_teams')
+        .delete()
+        .eq('id', id);
+
+      if (error) throw error;
 
       toast({
         title: "Success",
@@ -147,8 +181,8 @@ const ProjectTeamManagement = () => {
 
   const filteredMembers = teamMembers.filter(member => {
     const matchesSearch = 
-      member.user_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      member.project_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.profiles?.full_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      member.projects?.name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       member.role.toLowerCase().includes(searchTerm.toLowerCase());
     
     const matchesProject = projectFilter === 'all' || member.project_id === projectFilter;
@@ -309,10 +343,10 @@ const ProjectTeamManagement = () => {
               {filteredMembers.map((member) => (
                 <TableRow key={member.id}>
                   <TableCell className="font-medium">
-                    {member.user_name || 'Unknown User'}
+                    {member.profiles?.full_name || 'Unknown User'}
                   </TableCell>
-                  <TableCell>{member.project_name || 'Unknown Project'}</TableCell>
-                  <TableCell>{member.user_department || 'Unknown'}</TableCell>
+                  <TableCell>{member.projects?.name || 'Unknown Project'}</TableCell>
+                  <TableCell>{member.profiles?.department || 'Unknown'}</TableCell>
                   <TableCell>
                     <span className={`px-2 py-1 rounded-full text-xs ${
                       member.role === 'manager' ? 'bg-blue-100 text-blue-800' :

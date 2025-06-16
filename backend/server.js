@@ -7,8 +7,6 @@ require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
 const projectRoutes = require('./routes/projects');
-const teamRoutes = require('./routes/teams');
-const userRoutes = require('./routes/users');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -34,8 +32,6 @@ app.use(express.urlencoded({ extended: true }));
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/projects', projectRoutes);
-app.use('/api/teams', teamRoutes);
-app.use('/api/users', userRoutes);
 
 // Health check
 app.get('/health', (req, res) => {
