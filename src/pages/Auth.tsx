@@ -9,9 +9,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { apiClient } from '@/lib/api';
 
 const Auth = () => {
   const [isLoading, setIsLoading] = useState(false);
+  const [businessUnits, setBusinessUnits] = useState<{id: string, name: string}[]>([]);
   const [loginData, setLoginData] = useState({ email: '', password: '' });
   const [registerData, setRegisterData] = useState({ 
     email: '', 
@@ -24,6 +26,27 @@ const Auth = () => {
   const { signIn, signUp, user, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Fetch business units on component mount
+  useEffect(() => {
+    fetchBusinessUnits();
+  }, []);
+
+  const fetchBusinessUnits = async () => {
+    try {
+      const data = await apiClient.getBusinessUnits();
+      setBusinessUnits(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching business units:', error);
+      // Fallback to hardcoded values if API fails
+      setBusinessUnits([
+        { id: '1', name: 'Elixone' },
+        { id: '2', name: 'Capra' },
+        { id: '3', name: 'Vasta' },
+        { id: '4', name: 'Wash' }
+      ]);
+    }
+  };
 
   // Redirect authenticated users to dashboard
   useEffect(() => {
@@ -198,20 +221,19 @@ const Auth = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="department">Department</Label>
+                  <Label htmlFor="department">Business Unit</Label>
                   <Select
                     value={registerData.department}
                     onValueChange={(value) => setRegisterData(prev => ({ ...prev, department: value }))}
                     required
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select your department" />
+                      <SelectValue placeholder="Select your business unit" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Elixone">Elixone</SelectItem>
-                      <SelectItem value="Capra">Capra</SelectItem>
-                      <SelectItem value="Vasta">Vasta</SelectItem>
-                      <SelectItem value="Wash">Wash</SelectItem>
+                      {businessUnits.map(unit => (
+                        <SelectItem key={unit.id} value={unit.name}>{unit.name}</SelectItem>
+                      ))}
                       <SelectItem value="Other">Other</SelectItem>
                     </SelectContent>
                   </Select>

@@ -145,7 +145,8 @@ router.get('/users', authenticateToken, requireRole(['admin']), async (req, res)
 router.put('/users/:id', authenticateToken, requireRole(['admin']), [
   body('role').optional().isIn(['admin', 'manager', 'user', 'viewer']),
   body('is_active').optional().isBoolean(),
-  body('department').optional().trim()
+  body('department').optional().trim(),
+  body('team_id').optional().isUUID()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -154,33 +155,75 @@ router.put('/users/:id', authenticateToken, requireRole(['admin']), [
     }
     
     const { id } = req.params;
-    const updates = req.body;
+    const { team_id, ...requestBody } = req.body;
+    
+    // Extract only valid user table fields
+    const validUserFields = ['email', 'full_name', 'role', 'is_active', 'department'];
+    const userUpdates = {};
+    
+    validUserFields.forEach(field => {
+      if (requestBody[field] !== undefined) {
+        userUpdates[field] = requestBody[field];
+      }
+    });
     
     // Don't allow admin to deactivate themselves
-    if (id === req.user.id && updates.is_active === false) {
+    if (id === req.user.id && userUpdates.is_active === false) {
       return res.status(400).json({ error: 'Cannot deactivate your own account' });
     }
     
-    const setClause = Object.keys(updates)
-      .map((key, index) => `${key} = $${index + 2}`)
-      .join(', ');
+    const client = await pool.connect();
     
-    const values = [id, ...Object.values(updates)];
-    
-    const query = `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = $1 RETURNING *`;
-    const result = await pool.query(query, values);
-    
-    if (result.rows.length === 0) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-    
-    // Log admin activity
-    await pool.query(
-      'INSERT INTO admin_activity_log (admin_id, action, target_table, target_id, details) VALUES ($1, $2, $3, $4, $5)',
-      [req.user.id, 'UPDATE_USER', 'users', id, JSON.stringify(updates)]
-    );
-    
-    res.json({ user: result.rows[0] });
+    try {
+      await client.query('BEGIN');
+      
+      let result;
+      
+      // Update user table if there are user updates
+      if (Object.keys(userUpdates).length > 0) {
+        const setClause = Object.keys(userUpdates)
+          .map((key, index) => `${key} = $${index + 2}`)
+          .join(', ');
+        
+        const values = [id, ...Object.values(userUpdates)];
+        
+        const query = `UPDATE users SET ${setClause}, updated_at = NOW() WHERE id = $1 RETURNING *`;
+        result = await client.query(query, values);
+        
+        if (result.rows.length === 0) {
+          throw new Error('User not found');
+        }
+      } else {
+        // Just get the user if no user updates
+        result = await client.query('SELECT * FROM users WHERE id = $1', [id]);
+        if (result.rows.length === 0) {
+          throw new Error('User not found');
+        }
+      }
+      
+      // Update profile team_id if provided
+      if (team_id !== undefined) {
+        await client.query(
+          'INSERT INTO profiles (id, team_id, updated_at) VALUES ($1, $2, NOW()) ON CONFLICT (id) DO UPDATE SET team_id = $2, updated_at = NOW()',
+          [id, team_id]
+        );
+      }
+      
+      await client.query('COMMIT');
+       
+       // Log admin activity
+       await pool.query(
+         'INSERT INTO admin_activity_log (admin_id, action, target_table, target_id, details) VALUES ($1, $2, $3, $4, $5)',
+         [req.user.id, 'UPDATE_USER', 'users', id, JSON.stringify(req.body)]
+       );
+       
+       res.json({ user: result.rows[0] });
+     } catch (error) {
+       await client.query('ROLLBACK');
+       throw error;
+     } finally {
+       client.release();
+     }
   } catch (error) {
     console.error('Error updating user:', error);
     res.status(500).json({ error: error.message });
@@ -192,7 +235,8 @@ router.post('/users', authenticateToken, requireRole(['admin']), [
   body('email').isEmail().normalizeEmail(),
   body('full_name').trim().isLength({ min: 1 }),
   body('role').isIn(['admin', 'manager', 'user', 'viewer']),
-  body('status').optional().isIn(['active', 'inactive'])
+  body('status').optional().isIn(['active', 'inactive']),
+  body('team_id').optional().isUUID()
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -200,36 +244,62 @@ router.post('/users', authenticateToken, requireRole(['admin']), [
       return res.status(400).json({ errors: errors.array() });
     }
     
-    const { email, full_name, role, status = 'active' } = req.body;
+    const { email, full_name, role, status = 'active', team_id } = req.body;
     
-    // Check if user already exists
-    const existingUser = await pool.query('SELECT id FROM users WHERE email = $1', [email]);
-    if (existingUser.rows.length > 0) {
-      return res.status(400).json({ error: 'User with this email already exists' });
+    const client = await pool.connect();
+    
+    try {
+      await client.query('BEGIN');
+      
+      // Check if user already exists
+      const existingUser = await client.query('SELECT id FROM users WHERE email = $1', [email]);
+      if (existingUser.rows.length > 0) {
+        throw new Error('User with this email already exists');
+      }
+      
+      // Create user with default password (they'll need to reset it)
+      const defaultPassword = 'TempPassword123!';
+      const bcrypt = require('bcrypt');
+      const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+      
+      const result = await client.query(
+        `INSERT INTO users (email, password_hash, full_name, role, is_active, created_at, updated_at) 
+         VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) 
+         RETURNING id, email, full_name, role, is_active, created_at`,
+        [email, hashedPassword, full_name, role, status === 'active']
+      );
+      
+      const userId = result.rows[0].id;
+      
+      // Create profile with team_id if provided
+      if (team_id) {
+        await client.query(
+          'INSERT INTO profiles (id, team_id, created_at, updated_at) VALUES ($1, $2, NOW(), NOW())',
+          [userId, team_id]
+        );
+      }
+      
+      await client.query('COMMIT');
+      
+      // Log admin activity
+      await pool.query(
+        'INSERT INTO admin_activity_log (admin_id, action, target_table, target_id, details) VALUES ($1, $2, $3, $4, $5)',
+        [req.user.id, 'CREATE_USER', 'users', userId, JSON.stringify({ email, full_name, role, is_active: status === 'active', team_id })]
+      );
+      
+      res.status(201).json({ 
+        user: result.rows[0],
+        message: 'User created successfully. Default password is: TempPassword123!' 
+      });
+    } catch (error) {
+      await client.query('ROLLBACK');
+      if (error.message === 'User with this email already exists') {
+        return res.status(400).json({ error: error.message });
+      }
+      throw error;
+    } finally {
+      client.release();
     }
-    
-    // Create user with default password (they'll need to reset it)
-    const defaultPassword = 'TempPassword123!';
-    const bcrypt = require('bcrypt');
-    const hashedPassword = await bcrypt.hash(defaultPassword, 10);
-    
-    const result = await pool.query(
-      `INSERT INTO users (email, password_hash, full_name, role, is_active, created_at, updated_at) 
-       VALUES ($1, $2, $3, $4, $5, NOW(), NOW()) 
-       RETURNING id, email, full_name, role, is_active, created_at`,
-      [email, hashedPassword, full_name, role, status === 'active']
-    );
-    
-    // Log admin activity
-    await pool.query(
-      'INSERT INTO admin_activity_log (admin_id, action, target_table, target_id, details) VALUES ($1, $2, $3, $4, $5)',
-      [req.user.id, 'CREATE_USER', 'users', result.rows[0].id, JSON.stringify({ email, full_name, role, status })]
-    );
-    
-    res.status(201).json({ 
-      user: result.rows[0],
-      message: 'User created successfully. Default password is: TempPassword123!' 
-    });
   } catch (error) {
     console.error('Error creating user:', error);
     res.status(500).json({ error: error.message });

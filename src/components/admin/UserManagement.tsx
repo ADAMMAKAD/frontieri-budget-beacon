@@ -16,13 +16,21 @@ interface User {
   email: string;
   full_name: string;
   role: string;
-  status: string;
+  is_active: boolean;
   created_at: string;
   last_login?: string;
+  team_name?: string;
+  team_id?: string;
+}
+
+interface BusinessUnit {
+  id: string;
+  name: string;
 }
 
 export const UserManagement = () => {
   const [users, setUsers] = useState<User[]>([]);
+  const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -30,12 +38,14 @@ export const UserManagement = () => {
     email: '',
     full_name: '',
     role: 'user',
-    status: 'active'
+    status: 'active',
+    team_id: ''
   });
   const { toast } = useToast();
 
   useEffect(() => {
     fetchUsers();
+    fetchBusinessUnits();
   }, []);
 
   const fetchUsers = async () => {
@@ -55,12 +65,28 @@ export const UserManagement = () => {
     }
   };
 
+  const fetchBusinessUnits = async () => {
+    try {
+      const response = await apiClient.request('/business-units');
+      setBusinessUnits(response.business_units || []);
+    } catch (error) {
+      console.error('Error fetching business units:', error);
+    }
+  };
+
   const saveUser = async () => {
     try {
+      const { status, ...restUserData } = userData;
+      const userDataWithTeam = {
+        ...restUserData,
+        is_active: status === 'active',
+        team_id: userData.team_id === 'none' ? null : userData.team_id
+      };
+      
       if (editingUser) {
         await apiClient.request(`/admin/users/${editingUser.id}`, {
           method: 'PUT',
-          body: JSON.stringify(userData)
+          body: JSON.stringify(userDataWithTeam)
         });
 
         toast({
@@ -70,7 +96,7 @@ export const UserManagement = () => {
       } else {
         await apiClient.request('/admin/users', {
           method: 'POST',
-          body: JSON.stringify(userData)
+          body: JSON.stringify(userDataWithTeam)
         });
 
         toast({
@@ -81,7 +107,7 @@ export const UserManagement = () => {
 
       setDialogOpen(false);
       setEditingUser(null);
-      setUserData({ email: '', full_name: '', role: 'user', status: 'active' });
+      setUserData({ email: '', full_name: '', role: 'user', status: 'active', team_id: '' });
       fetchUsers();
     } catch (error: any) {
       console.error('Error saving user:', error);
@@ -115,27 +141,26 @@ export const UserManagement = () => {
     }
   };
 
-  const toggleUserStatus = async (id: string, currentStatus: string) => {
-    const newStatus = currentStatus === 'active' ? 'inactive' : 'active';
-    
+  const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
     try {
-      await apiClient.request(`/admin/users/${id}`, {
+      await apiClient.request(`/admin/users/${userId}`, {
         method: 'PUT',
-        body: JSON.stringify({ status: newStatus })
+        body: JSON.stringify({
+          is_active: !currentStatus
+        })
       });
-
+      
       toast({
         title: "Success",
-        description: `User ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`
+        description: "User status updated successfully",
       });
-
+      
       fetchUsers();
     } catch (error: any) {
-      console.error('Error updating user status:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to update user status",
-        variant: "destructive"
+        description: error.response?.data?.error || "Failed to update user status",
+        variant: "destructive",
       });
     }
   };
@@ -146,7 +171,8 @@ export const UserManagement = () => {
       email: user.email,
       full_name: user.full_name,
       role: user.role,
-      status: user.status
+      status: user.is_active ? 'active' : 'inactive',
+      team_id: user.team_id || 'none'
     });
     setDialogOpen(true);
   };
@@ -157,7 +183,8 @@ export const UserManagement = () => {
       email: '',
       full_name: '',
       role: 'user',
-      status: 'active'
+      status: 'active',
+      team_id: 'none'
     });
   };
 
@@ -252,6 +279,22 @@ export const UserManagement = () => {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="grid gap-2">
+                <Label htmlFor="business_unit">Business Unit</Label>
+                <Select value={userData.team_id} onValueChange={(value) => setUserData({ ...userData, team_id: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a business unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Business Unit</SelectItem>
+                    {businessUnits.map((unit) => (
+                      <SelectItem key={unit.id} value={unit.id}>
+                        {unit.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
             <DialogFooter>
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
@@ -318,6 +361,7 @@ export const UserManagement = () => {
                 <TableHead>Name</TableHead>
                 <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
+                <TableHead>Business Unit</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Last Login</TableHead>
                 <TableHead>Actions</TableHead>
@@ -343,8 +387,15 @@ export const UserManagement = () => {
                       </Badge>
                     </TableCell>
                     <TableCell>
-                      <Badge className={getStatusBadgeColor(user.status)}>
-                        {user.status}
+                      {user.team_name ? (
+                        <Badge variant="outline">{user.team_name}</Badge>
+                      ) : (
+                        <span className="text-gray-400">No unit assigned</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={user.is_active ? 'default' : 'destructive'}>
+                        {user.is_active ? 'Active' : 'Inactive'}
                       </Badge>
                     </TableCell>
                     <TableCell>
@@ -362,12 +413,19 @@ export const UserManagement = () => {
                         <Button
                           variant="outline"
                           size="sm"
-                          onClick={() => toggleUserStatus(user.id, user.status)}
+                          onClick={() => toggleUserStatus(user.id, user.is_active)}
+                          className={user.is_active ? 'text-red-600 hover:text-red-700' : 'text-green-600 hover:text-green-700'}
                         >
-                          {user.status === 'active' ? (
-                            <UserX className="h-4 w-4" />
+                          {user.is_active ? (
+                            <>
+                              <UserX className="w-4 h-4 mr-1" />
+                              Deactivate
+                            </>
                           ) : (
-                            <UserCheck className="h-4 w-4" />
+                            <>
+                              <UserCheck className="w-4 h-4 mr-1" />
+                              Activate
+                            </>
                           )}
                         </Button>
                         <Button

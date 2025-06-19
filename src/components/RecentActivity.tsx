@@ -1,9 +1,20 @@
-import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Clock, DollarSign, FileText, AlertTriangle, CheckCircle, XCircle, GitBranch, Users } from "lucide-react";
+import React, { useState, useEffect } from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { 
+  Clock, 
+  DollarSign, 
+  FileText, 
+  Users, 
+  AlertTriangle, 
+  GitBranch,
+  Filter,
+  RefreshCw
+} from 'lucide-react';
+import { apiClient } from '@/lib/api';
 import { useCurrency } from "@/contexts/CurrencyContext";
-import { apiClient } from "@/lib/api";
 import { useToast } from "@/hooks/use-toast";
 
 interface Activity {
@@ -18,7 +29,7 @@ interface Activity {
   department?: string;
 }
 
-const DEPARTMENTS = ['Elixone', 'Capra', 'Vasta', 'WASH'];
+// Business units will be fetched from API
 
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -80,11 +91,29 @@ export function RecentActivity() {
   const { formatCurrency } = useCurrency();
   const { toast } = useToast();
   const [activities, setActivities] = useState<Activity[]>([]);
+  const [businessUnits, setBusinessUnits] = useState<{id: string, name: string}[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    fetchBusinessUnits();
     fetchRecentActivities();
   }, []);
+
+  const fetchBusinessUnits = async () => {
+    try {
+      const data = await apiClient.getBusinessUnits();
+      setBusinessUnits(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching business units:', error);
+      // Fallback to hardcoded values if API fails
+      setBusinessUnits([
+        { id: '1', name: 'Elixone' },
+        { id: '2', name: 'Capra' },
+        { id: '3', name: 'Vasta' },
+        { id: '4', name: 'WASH' }
+      ]);
+    }
+  };
 
   const fetchRecentActivities = async () => {
     try {
@@ -119,8 +148,9 @@ export function RecentActivity() {
       const allActivities: Activity[] = [];
       
       // Process expenses
+      const businessUnitNames = businessUnits.map(unit => unit.name);
       expenses.forEach((expense: any) => {
-        if (DEPARTMENTS.includes(expense.project_name || expense.department)) {
+        if (businessUnitNames.includes(expense.project_name || expense.department)) {
           allActivities.push({
             id: `expense-${expense.id}`,
             type: `expense_${expense.status}`,
@@ -137,7 +167,7 @@ export function RecentActivity() {
       
       // Process projects
       projects.slice(0, 5).forEach((project: any) => {
-        if (DEPARTMENTS.includes(project.department)) {
+        if (businessUnitNames.includes(project.department)) {
           allActivities.push({
             id: `project-${project.id}`,
             type: 'project_updated',
@@ -234,7 +264,7 @@ export function RecentActivity() {
           <Clock className="h-5 w-5 text-blue-600" />
           <span>Recent Activity</span>
         </CardTitle>
-        <CardDescription>Latest budget activities and updates for {DEPARTMENTS.join(', ')}</CardDescription>
+        <CardDescription>Latest budget activities and updates for {businessUnits.map(bu => bu.name).join(', ')}</CardDescription>
       </CardHeader>
       <CardContent>
         <div className="space-y-4">

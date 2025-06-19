@@ -172,8 +172,8 @@ router.post('/broadcast', authenticateToken, requireRole(['admin']), [
         const { title, message, type, role_filter } = req.body;
         
         // Get users to notify
-        let userQuery = 'SELECT id FROM users WHERE status = $1';
-        const queryParams = ['active'];
+        let userQuery = 'SELECT id FROM users WHERE is_active = $1';
+        const queryParams = [true];
         
         if (role_filter && role_filter.length > 0) {
             userQuery += ` AND role = ANY($2)`;

@@ -137,7 +137,9 @@ class ApiClient {
 
   // Business Units
   async getBusinessUnits() {
-    return this.request('/business-units');
+    const response = await this.request('/business-units');
+    // Extract business_units array from the response object
+    return response.business_units || [];
   }
   async createBusinessUnit(bu: any) {
     return this.request('/business-units', {

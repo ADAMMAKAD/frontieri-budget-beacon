@@ -38,9 +38,11 @@ export const AdminBusinessUnits = () => {
   const fetchBusinessUnits = async () => {
     try {
       const data = await apiClient.getBusinessUnits();
-      setBusinessUnits(data || []);
+      // Ensure data is always an array
+      setBusinessUnits(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching business units:', error);
+      setBusinessUnits([]); // Set empty array on error
       toast({
         title: "Error",
         description: "Failed to load business units",
@@ -189,17 +191,23 @@ export const AdminBusinessUnits = () => {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead>Actions</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {businessUnits.map((unit) => (
+          {loading ? (
+            <div className="flex justify-center items-center py-8">
+              <div className="text-muted-foreground">Loading business units...</div>
+            </div>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Description</TableHead>
+                  <TableHead>Created</TableHead>
+                  <TableHead>Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Array.isArray(businessUnits) && businessUnits.length > 0 ? (
+                  businessUnits.map((unit) => (
                 <TableRow key={unit.id}>
                   <TableCell className="font-medium">{unit.name}</TableCell>
                   <TableCell>{unit.description || 'No description'}</TableCell>
@@ -222,10 +230,18 @@ export const AdminBusinessUnits = () => {
                       </Button>
                     </div>
                   </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+                    </TableRow>
+                  ))
+                ) : (
+                  <TableRow>
+                    <TableCell colSpan={4} className="text-center py-8 text-muted-foreground">
+                      No business units found
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          )}
         </CardContent>
       </Card>
     </div>

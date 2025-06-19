@@ -37,6 +37,7 @@ type SortOption = 'name' | 'budget' | 'status' | 'date' | 'spent';
 const BudgetPlanning = () => {
   const [projects, setProjects] = useState<Project[]>([]);
   const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
+  const [businessUnits, setBusinessUnits] = useState<{id: string, name: string}[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [selectedProject, setSelectedProject] = useState<Project | null>(null);
@@ -70,7 +71,24 @@ const BudgetPlanning = () => {
 
   useEffect(() => {
     fetchProjects();
+    fetchBusinessUnits();
   }, []);
+
+  const fetchBusinessUnits = async () => {
+    try {
+      const data = await apiClient.getBusinessUnits();
+      setBusinessUnits(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching business units:', error);
+      // Fallback to hardcoded values if API fails
+      setBusinessUnits([
+        { id: '1', name: 'Elixone Tech' },
+        { id: '2', name: 'Capra communication' },
+        { id: '3', name: 'Vasta Talent' },
+        { id: '4', name: 'WASH' }
+      ]);
+    }
+  };
 
   useEffect(() => {
     filterAndSortProjects();
@@ -351,7 +369,11 @@ const BudgetPlanning = () => {
   };
 
   const getDepartments = () => {
-    return ['Elixone Tech', 'Capra communication', 'Vasta Talent', 'WASH'];
+    return businessUnits.map(unit => unit.name);
+  };
+
+  const getBusinessUnits = () => {
+    return businessUnits;
   };
 
   const getProjectStats = (project: Project) => {
@@ -939,16 +961,16 @@ const BudgetPlanning = () => {
               </Select>
             </div>
             
-            {/* Department Filter */}
+            {/* Business Unit Filter */}
             <div>
               <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
                 <SelectTrigger className="border-gray-200 focus:border-orange-500">
-                  <SelectValue placeholder="Department" />
+                  <SelectValue placeholder="Business Unit" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="all">All Departments</SelectItem>
-                  {getDepartments().map(dept => (
-                    <SelectItem key={dept} value={dept}>{dept}</SelectItem>
+                  <SelectItem value="all">All Business Units</SelectItem>
+                  {businessUnits.map(unit => (
+                    <SelectItem key={unit.id} value={unit.name}>{unit.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1034,19 +1056,18 @@ const BudgetPlanning = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="department">Department</Label>
+                  <Label htmlFor="department">Business Unit</Label>
                   <Select 
                     value={newProject.department} 
                     onValueChange={(value) => setNewProject(prev => ({ ...prev, department: value }))}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select department" />
+                      <SelectValue placeholder="Select business unit" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="Elixone Tech">Elixone Tech</SelectItem>
-                      <SelectItem value="Capra communication">Capra communication</SelectItem>
-                      <SelectItem value="Vasta Talent">Vasta Talent</SelectItem>
-                      <SelectItem value="WASH">WASH</SelectItem>
+                      {businessUnits.map(unit => (
+                        <SelectItem key={unit.id} value={unit.name}>{unit.name}</SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
