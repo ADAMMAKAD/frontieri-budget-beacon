@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -40,13 +40,8 @@ const ApprovalWorkflows = () => {
 
   const fetchWorkflows = async () => {
     try {
-      const { data, error } = await supabase
-        .from('approval_workflows')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setWorkflows(data || []);
+      const response = await apiClient.getApprovalWorkflows();
+      setWorkflows(response.data || []);
     } catch (error) {
       console.error('Error fetching workflows:', error);
       toast({
@@ -61,17 +56,12 @@ const ApprovalWorkflows = () => {
 
   const handleApprove = async (workflowId: string) => {
     try {
-      const { error } = await supabase
-        .from('approval_workflows')
-        .update({
-          status: 'approved',
-          comments: comments,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', workflowId);
+      await apiClient.updateApprovalWorkflow(workflowId, {
+        status: 'approved',
+        comments: comments,
+        updated_at: new Date().toISOString()
+      });
 
-      if (error) throw error;
-      
       toast({
         title: "Success",
         description: "Request approved successfully"
@@ -92,16 +82,11 @@ const ApprovalWorkflows = () => {
 
   const handleReject = async (workflowId: string) => {
     try {
-      const { error } = await supabase
-        .from('approval_workflows')
-        .update({
-          status: 'rejected',
-          comments: comments,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', workflowId);
-
-      if (error) throw error;
+      await apiClient.updateApprovalWorkflow(workflowId, {
+        status: 'rejected',
+        comments: comments,
+        updated_at: new Date().toISOString()
+      });
       
       toast({
         title: "Success",

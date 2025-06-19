@@ -1,6 +1,8 @@
 
 const fs = require('fs');
 const path = require('path');
+// Explicitly load .env from the backend directory
+require('dotenv').config({ path: path.resolve(__dirname, '../.env') });
 const pool = require('../config/database');
 
 async function runMigrations() {

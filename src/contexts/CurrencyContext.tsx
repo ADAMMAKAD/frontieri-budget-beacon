@@ -18,7 +18,7 @@ const CURRENCIES: Record<Currency, CurrencyConfig> = {
 interface CurrencyContextType {
   currency: Currency;
   setCurrency: (currency: Currency) => void;
-  formatCurrency: (amount: number) => string;
+  formatCurrency: (amount: number, currency?: Currency) => string;
   convertCurrency: (amount: number, from: Currency, to: Currency) => number;
   getCurrencyConfig: (currency: Currency) => CurrencyConfig;
   availableCurrencies: CurrencyConfig[];
@@ -37,14 +37,18 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('currency', newCurrency);
   };
 
-  const formatCurrency = (amount: number) => {
-    const config = CURRENCIES[currency];
-    const convertedAmount = convertCurrency(amount, 'USD', currency);
+  const formatCurrency = (amount: number, targetCurrency?: Currency) => {
+    const currencyToUse = targetCurrency || currency;
+    const config = CURRENCIES[currencyToUse];
     
-    if (currency === 'USD') {
-      return `${config.symbol}${convertedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // If targetCurrency is provided, assume the amount is already in that currency
+    // Otherwise, convert from USD to the current currency
+    const displayAmount = targetCurrency ? amount : convertCurrency(amount, 'USD', currencyToUse);
+    
+    if (currencyToUse === 'USD') {
+      return `${config.symbol}${displayAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
     } else {
-      return `${convertedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${config.symbol}`;
+      return `${displayAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${config.symbol}`;
     }
   };
 

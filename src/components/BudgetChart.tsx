@@ -3,7 +3,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell } from "recharts";
 import { useCurrency } from "@/contexts/CurrencyContext";
 import { useState, useEffect } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { apiClient } from "@/lib/api";
 
 const monthlyData = [
   { month: "Jan", planned: 400000, actual: 380000 },
@@ -31,19 +31,10 @@ export function BudgetChart() {
 
   const fetchBusinessUnits = async () => {
     try {
-      const { data, error } = await supabase
-        .from('business_units')
-        .select('*')
-        .limit(5);
-
-      if (error) {
-        console.error('Error fetching business units:', error);
-        setBusinessUnits([]);
-      } else {
-        setBusinessUnits(data || []);
-      }
+      const data = await apiClient.get('/business-units?limit=5');
+      setBusinessUnits(data || []);
     } catch (error) {
-      console.error('Error:', error);
+      console.error('Error fetching business units:', error);
       setBusinessUnits([]);
     } finally {
       setLoading(false);

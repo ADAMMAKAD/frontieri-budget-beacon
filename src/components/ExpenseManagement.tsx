@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
+import { useCurrency } from '@/contexts/CurrencyContext';
 import { Receipt, Plus, DollarSign, Search, Filter } from 'lucide-react';
 
 interface Expense {
@@ -29,9 +30,17 @@ interface Project {
   name: string;
 }
 
+interface BudgetCategory {
+  id: string;
+  name: string;
+  allocated_amount: number;
+  spent_amount: number;
+}
+
 const ExpenseManagement = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [projects, setProjects] = useState<Project[]>([]);
+  const [categories, setCategories] = useState<BudgetCategory[]>([]);
   const [isCreating, setIsCreating] = useState(false);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -41,32 +50,52 @@ const ExpenseManagement = () => {
     description: '',
     amount: 0,
     project_id: '',
+    category_id: '',
     expense_date: new Date().toISOString().split('T')[0]
   });
   const { toast } = useToast();
   const { user } = useAuth();
+  const { formatCurrency } = useCurrency();
 
   useEffect(() => {
     fetchData();
   }, []);
 
+  useEffect(() => {
+    if (formData.project_id) {
+      fetchCategories(formData.project_id);
+    } else {
+      setCategories([]);
+      setFormData(prev => ({ ...prev, category_id: '' }));
+    }
+  }, [formData.project_id]);
+
   const fetchData = async () => {
     try {
+      console.log('🔄 Fetching expenses and projects...');
+      
       const [expensesResult, projectsResult] = await Promise.all([
-        supabase.from('expenses').select('*').order('created_at', { ascending: false }),
-        supabase.from('projects').select('id, name')
+        apiClient.getExpenses(),
+        apiClient.getProjects()
       ]);
-
-      if (expensesResult.error) throw expensesResult.error;
-      if (projectsResult.error) throw projectsResult.error;
-
-      setExpenses(expensesResult.data || []);
-      setProjects(projectsResult.data || []);
+      
+      console.log('📊 Expenses result:', expensesResult);
+      console.log('📋 Projects result:', projectsResult);
+      
+      setExpenses(expensesResult.expenses || expensesResult.data || []);
+      
+      // Handle different possible response structures
+      const projectsData = projectsResult.data || projectsResult.projects || projectsResult;
+      console.log('📋 Projects data to set:', projectsData);
+      
+      setProjects(Array.isArray(projectsData) ? projectsData : []);
+      
+      console.log('✅ Data fetched successfully');
     } catch (error) {
-      console.error('Error fetching data:', error);
+      console.error('❌ Error fetching data:', error);
       toast({
         title: "Error",
-        description: "Failed to load expenses",
+        description: "Failed to load data. Check console for details.",
         variant: "destructive"
       });
     } finally {
@@ -74,26 +103,50 @@ const ExpenseManagement = () => {
     }
   };
 
+  const fetchCategories = async (projectId: string) => {
+    if (!projectId) {
+      console.log('🔄 No project ID provided, clearing categories');
+      setCategories([]);
+      return;
+    }
+    
+    try {
+      console.log('🔄 Fetching categories for project:', projectId);
+      const result = await apiClient.getBudgetCategories(projectId);
+      console.log('📊 Categories API result:', result);
+      
+      const categoriesData = result.data || result.categories || result || [];
+      console.log('📊 Categories data to set:', categoriesData);
+      
+      // Ensure we always set an array
+      const finalCategories = Array.isArray(categoriesData) ? categoriesData : [];
+      console.log('📊 Final categories array:', finalCategories);
+      setCategories(finalCategories);
+    } catch (error) {
+      console.error('❌ Error fetching categories:', error);
+      setCategories([]);
+    }
+  };
+
   const submitExpense = async () => {
     try {
-      if (!formData.description || !formData.amount || !formData.project_id) {
+      if (!formData.description || !formData.amount || !formData.project_id || !formData.category_id) {
         toast({
           title: "Error",
-          description: "Please fill in all required fields",
+          description: "Please fill in all required fields including category",
           variant: "destructive"
         });
         return;
       }
 
-      const { error } = await supabase
-        .from('expenses')
-        .insert([{
-          ...formData,
-          submitted_by: user?.id,
-          status: 'pending'
-        }]);
-
-      if (error) throw error;
+      await apiClient.createExpense({
+        project_id: formData.project_id,
+        category_id: formData.category_id,
+        description: formData.description,
+        amount: formData.amount,
+        expense_date: formData.expense_date,
+        submitted_by: user?.id
+      });
 
       toast({
         title: "Success",
@@ -104,6 +157,7 @@ const ExpenseManagement = () => {
         description: '',
         amount: 0,
         project_id: '',
+        category_id: '',
         expense_date: new Date().toISOString().split('T')[0]
       });
       setIsCreating(false);
@@ -148,7 +202,7 @@ const ExpenseManagement = () => {
     setProjectFilter('all');
   };
 
-  const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const totalExpenses = expenses.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0);
   const pendingExpenses = expenses.filter(exp => exp.status === 'pending').length;
   const approvedExpenses = expenses.filter(exp => exp.status === 'approved').length;
 
@@ -226,7 +280,7 @@ const ExpenseManagement = () => {
             <div className="flex items-center space-x-2">
               <DollarSign className="h-8 w-8 text-green-600" />
               <div>
-                <p className="text-2xl font-bold">${totalExpenses.toLocaleString()}</p>
+                <p className="text-2xl font-bold">{formatCurrency(totalExpenses)}</p>
                 <p className="text-sm text-gray-600">Total Expenses</p>
               </div>
             </div>
@@ -270,7 +324,10 @@ const ExpenseManagement = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="project">Project</Label>
-                <Select value={formData.project_id} onValueChange={(value) => setFormData(prev => ({ ...prev, project_id: value }))}>
+                <Select value={formData.project_id} onValueChange={(value) => {
+                  setFormData(prev => ({ ...prev, project_id: value, category_id: '' }));
+                  fetchCategories(value);
+                }}>
                   <SelectTrigger>
                     <SelectValue placeholder="Select project" />
                   </SelectTrigger>
@@ -278,6 +335,26 @@ const ExpenseManagement = () => {
                     {projects.map((project) => (
                       <SelectItem key={project.id} value={project.id}>
                         {project.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="category">Budget Category</Label>
+                <Select 
+                  value={formData.category_id} 
+                  onValueChange={(value) => setFormData(prev => ({ ...prev, category_id: value }))}
+                  disabled={!formData.project_id}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={formData.project_id ? "Select category" : "Select project first"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Array.isArray(categories) && categories.map((category) => (
+                      <SelectItem key={category.id} value={category.id}>
+                        {category.name} ({formatCurrency(category.allocated_amount)} allocated)
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -355,7 +432,7 @@ const ExpenseManagement = () => {
                   <TableRow key={expense.id}>
                     <TableCell className="font-medium">{expense.description}</TableCell>
                     <TableCell>{project?.name || 'Unknown Project'}</TableCell>
-                    <TableCell>${expense.amount.toLocaleString()}</TableCell>
+                    <TableCell>{formatCurrency(expense.amount)}</TableCell>
                     <TableCell>{new Date(expense.expense_date).toLocaleDateString()}</TableCell>
                     <TableCell>
                       <Badge className={getStatusColor(expense.status)}>

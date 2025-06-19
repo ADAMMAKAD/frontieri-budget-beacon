@@ -4,7 +4,7 @@ const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const { body, validationResult } = require('express-validator');
 const pool = require('../config/database');
-const { authenticateToken } = require('../middleware/auth');
+const { authenticateToken, requireRole } = require('../middleware/auth');
 
 const router = express.Router();
 
@@ -98,9 +98,6 @@ router.post('/login', [
             return res.status(401).json({ error: 'Invalid credentials' });
         }
 
-        // Update last login
-        await pool.query('UPDATE users SET last_login = NOW() WHERE id = $1', [user.id]);
-
         // Generate token
         const token = jwt.sign({ userId: user.id }, process.env.JWT_SECRET, {
             expiresIn: process.env.JWT_EXPIRES_IN
@@ -139,6 +136,71 @@ router.get('/me', authenticateToken, async (req, res) => {
         console.error('Get user error:', error);
         res.status(500).json({ error: 'Failed to get user' });
     }
+});
+// POST /auth/2fa/setup - Setup 2FA
+// POST /auth/2fa/verify - Verify 2FA
+
+// GET /auth/profile/:id - Get user profile
+router.get('/profile/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Check if user can access this profile (own profile or admin)
+        if (req.user.id !== id && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        const result = await pool.query(
+            'SELECT u.id, u.email, u.full_name, u.department, u.role, u.created_at FROM users u WHERE u.id = $1',
+            [id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Profile not found' });
+        }
+
+        res.json(result.rows[0]);
+    } catch (error) {
+        console.error('Get profile error:', error);
+        res.status(500).json({ error: 'Failed to get profile' });
+    }
+});
+
+// PUT /auth/profile/:id - Update user profile
+router.put('/profile/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        const { full_name, department } = req.body;
+        
+        // Check if user can update this profile (own profile or admin)
+        if (req.user.id !== id && req.user.role !== 'admin') {
+            return res.status(403).json({ error: 'Access denied' });
+        }
+
+        const result = await pool.query(
+            'UPDATE users SET full_name = $1, department = $2, updated_at = NOW() WHERE id = $3 RETURNING id, email, full_name, department, role',
+            [full_name, department, id]
+        );
+
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Profile not found' });
+        }
+
+        res.json({ message: 'Profile updated successfully', user: result.rows[0] });
+    } catch (error) {
+        console.error('Update profile error:', error);
+        res.status(500).json({ error: 'Failed to update profile' });
+    }
+});
+
+// Add user count endpoint
+router.get('/users/count', authenticateToken, requireRole(['admin']), async (req, res) => {
+  try {
+    const result = await pool.query('SELECT COUNT(*) as count FROM users');
+    res.json({ count: parseInt(result.rows[0].count) });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 module.exports = router;

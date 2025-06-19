@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -37,12 +37,7 @@ export const AdminBusinessUnits = () => {
 
   const fetchBusinessUnits = async () => {
     try {
-      const { data, error } = await supabase
-        .from('business_units')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const data = await apiClient.getBusinessUnits();
       setBusinessUnits(data || []);
     } catch (error) {
       console.error('Error fetching business units:', error);
@@ -59,23 +54,14 @@ export const AdminBusinessUnits = () => {
   const saveBusinessUnit = async () => {
     try {
       if (editingUnit) {
-        const { error } = await supabase
-          .from('business_units')
-          .update(unitData)
-          .eq('id', editingUnit.id);
-
-        if (error) throw error;
+        await apiClient.updateBusinessUnit(editingUnit.id, unitData);
 
         toast({
           title: "Success",
           description: "Business unit updated successfully"
         });
       } else {
-        const { error } = await supabase
-          .from('business_units')
-          .insert([unitData]);
-
-        if (error) throw error;
+        await apiClient.createBusinessUnit(unitData);
 
         toast({
           title: "Success",
@@ -84,7 +70,8 @@ export const AdminBusinessUnits = () => {
       }
 
       setDialogOpen(false);
-      resetForm();
+      setEditingUnit(null);
+      setUnitData({ name: '', description: '' });
       fetchBusinessUnits();
     } catch (error: any) {
       console.error('Error saving business unit:', error);
@@ -98,12 +85,7 @@ export const AdminBusinessUnits = () => {
 
   const deleteBusinessUnit = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('business_units')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await apiClient.deleteBusinessUnit(id);
 
       toast({
         title: "Success",

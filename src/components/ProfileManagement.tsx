@@ -1,13 +1,13 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { useRole } from '@/hooks/useRole';
+
 import { User, Mail, Building, Edit, Save, X } from 'lucide-react';
 
 interface Profile {
@@ -24,7 +24,7 @@ const ProfileManagement = () => {
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
   const { user } = useAuth();
-  const { userRole, isAdmin, loading: roleLoading } = useRole();
+
 
   useEffect(() => {
     if (user) {
@@ -34,40 +34,27 @@ const ProfileManagement = () => {
 
   const fetchProfile = async () => {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', user?.id)
-        .maybeSingle();
-
-      if (error && error.code !== 'PGRST116') {
-        throw error;
-      }
-
+      const data = await apiClient.get(`/auth/profile/${user?.id}`);
+      
       if (data) {
         const profileData: Profile = {
           id: data.id,
           full_name: data.full_name || '',
           department: data.department || '',
-          role: userRole || 'user'
+          role: 'user'
         };
         setProfile(profileData);
         setEditedProfile(profileData);
       } else if (user) {
-        // No profile row, create new profile using user fields
+        // Create new profile
         const newProfile: Profile = {
           id: user.id,
           full_name: user.full_name || '',
           department: user.department || '',
-          role: userRole || 'user'
+          role: 'user'
         };
 
-        // Insert minimal profile
-        const { error: insertError } = await supabase
-          .from('profiles')
-          .insert([newProfile]);
-
-        if (insertError) throw insertError;
+        await apiClient.post('/auth/profile', newProfile);
 
         setProfile(newProfile);
         setEditedProfile(newProfile);
@@ -86,12 +73,7 @@ const ProfileManagement = () => {
 
   const updateProfile = async () => {
     try {
-      const { error } = await supabase
-        .from('profiles')
-        .update(editedProfile)
-        .eq('id', user?.id);
-
-      if (error) throw error;
+      await apiClient.updateProfile(user?.id!, editedProfile);
 
       setProfile({ ...profile, ...editedProfile } as Profile);
       setIsEditing(false);
@@ -110,7 +92,7 @@ const ProfileManagement = () => {
     }
   };
 
-  if (loading || roleLoading) {
+  if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
@@ -206,7 +188,7 @@ const ProfileManagement = () => {
               <Label htmlFor="role">Role</Label>
               <Input
                 id="role"
-                value={userRole || 'user'}
+                value={profile?.role || 'user'}
                 disabled
                 className="bg-gray-50"
               />
@@ -215,27 +197,7 @@ const ProfileManagement = () => {
         </CardContent>
       </Card>
 
-      {/* Admin-only section */}
-      {isAdmin && (
-        <Card className="border-red-200">
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2 text-red-700">
-              <User className="h-5 w-5" />
-              <span>Administrator Information</span>
-            </CardTitle>
-            <CardDescription>Additional information for admin users</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="bg-red-50 p-4 rounded-lg">
-              <p className="text-red-800 font-medium">Administrator Access</p>
-              <p className="text-red-600 text-sm mt-1">
-                You have administrator privileges which grant access to user management, 
-                system settings, and advanced features.
-              </p>
-            </div>
-          </CardContent>
-        </Card>
-      )}
+
     </div>
   );
 };

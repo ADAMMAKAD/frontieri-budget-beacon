@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { Button } from '@/components/ui/button';
@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 
@@ -20,9 +21,35 @@ const Auth = () => {
     confirmPassword: ''
   });
   
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, user, loading } = useAuth();
   const navigate = useNavigate();
   const { toast } = useToast();
+
+  // Redirect authenticated users to dashboard
+  useEffect(() => {
+    if (!loading && user) {
+      navigate('/', { replace: true });
+    }
+  }, [user, loading, navigate]);
+
+  // Show loading while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-orange-50 flex items-center justify-center p-4">
+        <div className="text-center">
+          <div className="w-8 h-8 bg-gradient-to-r from-orange-500 to-orange-600 rounded-lg flex items-center justify-center mx-auto mb-4">
+            <span className="text-white font-bold text-sm">F</span>
+          </div>
+          <p className="text-gray-600">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  // Don't render login form if user is authenticated
+  if (user) {
+    return null;
+  }
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -59,6 +86,15 @@ const Auth = () => {
       return;
     }
 
+    if (!registerData.department) {
+      toast({
+        title: "Registration failed",
+        description: "Please select a department",
+        variant: "destructive"
+      });
+      return;
+    }
+
     setIsLoading(true);
 
     const { error } = await signUp(
@@ -71,14 +107,20 @@ const Auth = () => {
     if (error) {
       toast({
         title: "Registration failed",
-        description: error.message,
+        description: error.message || error.error || 'Registration failed',
         variant: "destructive"
       });
     } else {
       toast({
         title: "Registration successful!",
-        description: "Please check your email to confirm your account."
+        description: "Welcome! You can now access the system."
       });
+      
+      // Auto-login after successful registration
+      const loginResult = await signIn(registerData.email, registerData.password);
+      if (!loginResult.error) {
+        navigate('/');
+      }
     }
     
     setIsLoading(false);
@@ -157,14 +199,22 @@ const Auth = () => {
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="department">Department</Label>
-                  <Input
-                    id="department"
-                    type="text"
-                    placeholder="Enter your department"
+                  <Select
                     value={registerData.department}
-                    onChange={(e) => setRegisterData(prev => ({ ...prev, department: e.target.value }))}
+                    onValueChange={(value) => setRegisterData(prev => ({ ...prev, department: value }))}
                     required
-                  />
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select your department" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Elixone">Elixone</SelectItem>
+                      <SelectItem value="Capra">Capra</SelectItem>
+                      <SelectItem value="Vasta">Vasta</SelectItem>
+                      <SelectItem value="Wash">Wash</SelectItem>
+                      <SelectItem value="Other">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="registerEmail">Email</Label>

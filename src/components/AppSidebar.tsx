@@ -1,6 +1,8 @@
 
-import { LayoutDashboard, PieChart, DollarSign, TrendingUp, FileText, Shield, Settings, Bell, Users, Building2, UserCog, GitBranch, CheckSquare, ShieldCheck, Target } from "lucide-react";
+import { LayoutDashboard, PieChart, DollarSign, TrendingUp, FileText, Shield, Settings, Bell, Users, Building2, UserCog, GitBranch, CheckSquare, ShieldCheck, Target, Activity, Brain, LogOut } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/hooks/useAuth";
+import { hasPermission, getRoleDisplayName, getRoleColor, type UserRole } from "@/utils/rolePermissions";
 import {
   Sidebar,
   SidebarContent,
@@ -13,41 +15,166 @@ import {
   SidebarMenuItem,
   SidebarTrigger,
   useSidebar,
+  SidebarFooter,
 } from "@/components/ui/sidebar";
 
 const menuItems = [
-  { id: "overview", title: "Overview", icon: LayoutDashboard },
-  { id: "planning", title: "Budget Planning", icon: PieChart },
-  { id: "allocation", title: "Budget Allocation", icon: DollarSign },
-  { id: "tracking", title: "Budget Tracking", icon: TrendingUp },
-  { id: "milestones", title: "Project Milestones", icon: Target },
-  { id: "reporting", title: "Reporting", icon: FileText },
-  { id: "audit", title: "Audit Compliance", icon: Shield },
+  { 
+    id: "overview", 
+    title: "Overview", 
+    icon: LayoutDashboard
+  },
+  { 
+    id: "planning", 
+    title: "Budget Planning", 
+    icon: PieChart
+  },
+  { 
+    id: "allocation", 
+    title: "Budget Allocation", 
+    icon: DollarSign
+  },
+  { 
+    id: "tracking", 
+    title: "Budget Tracking", 
+    icon: TrendingUp
+  },
+  { 
+    id: "milestones", 
+    title: "Project Milestones", 
+    icon: Target
+  },
+  { 
+    id: "reporting", 
+    title: "Reporting", 
+    icon: FileText
+  },
+  { 
+    id: "audit", 
+    title: "Audit Compliance", 
+    icon: Shield
+  },
+];
+
+const advancedItems = [
+  { 
+    id: "analytics", 
+    title: "Advanced Analytics", 
+    icon: TrendingUp
+  },
+  { 
+    id: "realtime", 
+    title: "Real-Time Monitor", 
+    icon: Activity
+  },
+  { 
+    id: "ai-optimizer", 
+    title: "AI Resource Optimizer", 
+    icon: Brain
+  },
 ];
 
 const managementItems = [
-  { id: "expenses", title: "Expense Management", icon: DollarSign },
-  { id: "business-units", title: "Business Units", icon: Building2 },
-  { id: "project-teams", title: "Project Teams", icon: Users },
-  { id: "budget-versions", title: "Budget Versions", icon: GitBranch },
-  { id: "approvals", title: "Approval Workflows", icon: CheckSquare },
-  { id: "notifications", title: "Notifications", icon: Bell },
+  { 
+    id: "expenses", 
+    title: "Expense Management", 
+    icon: DollarSign
+  },
+  { 
+    id: "business-units", 
+    title: "Business Units", 
+    icon: Building2
+  },
+  { 
+    id: "project-teams", 
+    title: "Project Teams", 
+    icon: Users
+  },
+  { 
+    id: "budget-versions", 
+    title: "Budget Versions", 
+    icon: GitBranch
+  },
+  { 
+    id: "approvals", 
+    title: "Approval Workflows", 
+    icon: CheckSquare
+  },
+  { 
+    id: "notifications", 
+    title: "Notifications", 
+    icon: Bell
+  },
+  { 
+    id: "settings", 
+    title: "Settings", 
+    icon: Settings
+  },
 ];
 
 const adminItems = [
-  { id: "admin", title: "Admin Dashboard", icon: ShieldCheck },
+  { 
+    id: "admin", 
+    title: "Admin Dashboard", 
+    icon: Settings
+  },
+  // { 
+  //   id: "user-management", 
+  //   title: "User Management", 
+  //   icon: Users
+  // },
+  // { 
+  //   id: "user-registration", 
+  //   title: "User Registration", 
+  //   icon: UserCog
+  // },
 ];
 
 interface AppSidebarProps {
   activeSection: string;
   setActiveSection: (section: string) => void;
-  isAdmin?: boolean;
 }
 
-export function AppSidebar({ activeSection, setActiveSection, isAdmin }: AppSidebarProps) {
+export function AppSidebar({ activeSection, setActiveSection }: AppSidebarProps) {
   const { state } = useSidebar();
   const navigate = useNavigate();
+  const { user, signOut } = useAuth();
   const isCollapsed = state === "collapsed";
+  
+  const userRole = (user?.role || 'user') as UserRole;
+  
+  const shouldShowMenuItem = (item: any) => {
+    // Map menu item IDs to resource names
+    const resourceMap: Record<string, string> = {
+      'overview': 'dashboard',
+      'planning': 'budget-planning',
+      'allocation': 'budget-allocation',
+      'tracking': 'budget-tracking',
+      'milestones': 'milestones',
+      'reporting': 'reporting',
+      'audit': 'audit',
+      'expenses': 'expenses',
+      'business-units': 'business-units',
+      'project-teams': 'project-teams',
+      'budget-versions': 'budget-versions',
+      'approvals': 'approvals',
+      'notifications': 'notifications',
+      'analytics': 'analytics',
+      'realtime': 'realtime',
+      'ai-optimizer': 'ai-optimizer',
+      'admin': 'admin',
+      // 'user-management': 'user-management',
+      // 'user-registration': 'user-registration',
+    };
+    
+    const resource = resourceMap[item.id] || item.id;
+    return hasPermission(userRole, resource);
+  };
+  
+  const handleLogout = async () => {
+    await signOut();
+    navigate('/auth');
+  };
 
   const handleNavigation = (itemId: string) => {
     if (itemId === "admin") {
@@ -82,7 +209,7 @@ export function AppSidebar({ activeSection, setActiveSection, isAdmin }: AppSide
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {menuItems.map((item) => (
+              {menuItems.filter(shouldShowMenuItem).map((item) => (
                 <SidebarMenuItem key={item.id}>
                   <SidebarMenuButton
                     onClick={() => handleNavigation(item.id)}
@@ -92,55 +219,30 @@ export function AppSidebar({ activeSection, setActiveSection, isAdmin }: AppSide
                         : "hover:bg-gray-100 text-gray-700"
                     }`}
                   >
-                    <item.icon className={`h-4 w-4 ${isCollapsed ? "mx-auto" : "mr-3"}`} />
-                    {!isCollapsed && <span className="font-medium">{item.title}</span>}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
+                      <item.icon className={`h-4 w-4 ${isCollapsed ? "mx-auto" : "mr-3"}`} />
+                      {!isCollapsed && <span className="font-medium">{item.title}</span>}
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
 
-        <SidebarGroup>
-          <SidebarGroupLabel className="text-gray-600 font-medium">
-            {!isCollapsed && "Management"}
-          </SidebarGroupLabel>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {managementItems.map((item) => (
-                <SidebarMenuItem key={item.id}>
-                  <SidebarMenuButton
-                    onClick={() => handleNavigation(item.id)}
-                    className={`w-full transition-all duration-200 ${
-                      activeSection === item.id
-                        ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg"
-                        : "hover:bg-gray-100 text-gray-700"
-                    }`}
-                  >
-                    <item.icon className={`h-4 w-4 ${isCollapsed ? "mx-auto" : "mr-3"}`} />
-                    {!isCollapsed && <span className="font-medium">{item.title}</span>}
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
-        </SidebarGroup>
-
-        {isAdmin && (
+        {managementItems.filter(shouldShowMenuItem).length > 0 && (
           <SidebarGroup>
-            <SidebarGroupLabel className="text-red-600 font-medium">
-              {!isCollapsed && "Administration"}
+            <SidebarGroupLabel className="text-gray-600 font-medium">
+              {!isCollapsed && "Management"}
             </SidebarGroupLabel>
             <SidebarGroupContent>
               <SidebarMenu>
-                {adminItems.map((item) => (
+                {managementItems.filter(shouldShowMenuItem).map((item) => (
                   <SidebarMenuItem key={item.id}>
                     <SidebarMenuButton
                       onClick={() => handleNavigation(item.id)}
                       className={`w-full transition-all duration-200 ${
                         activeSection === item.id
-                          ? "bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg"
-                          : "hover:bg-red-50 text-red-700"
+                          ? "bg-gradient-to-r from-orange-500 to-orange-600 text-white shadow-lg"
+                          : "hover:bg-gray-100 text-gray-700"
                       }`}
                     >
                       <item.icon className={`h-4 w-4 ${isCollapsed ? "mx-auto" : "mr-3"}`} />
@@ -152,6 +254,60 @@ export function AppSidebar({ activeSection, setActiveSection, isAdmin }: AppSide
             </SidebarGroupContent>
           </SidebarGroup>
         )}
+
+        {advancedItems.filter(shouldShowMenuItem).length > 0 && (
+           <SidebarGroup>
+             <SidebarGroupLabel className="text-purple-600 font-medium">
+               {!isCollapsed && "Advanced Analytics"}
+             </SidebarGroupLabel>
+             <SidebarGroupContent>
+               <SidebarMenu>
+                 {advancedItems.filter(shouldShowMenuItem).map((item) => (
+                   <SidebarMenuItem key={item.id}>
+                     <SidebarMenuButton
+                       onClick={() => handleNavigation(item.id)}
+                       className={`w-full transition-all duration-200 ${
+                         activeSection === item.id
+                           ? "bg-gradient-to-r from-purple-500 to-purple-600 text-white shadow-lg"
+                           : "hover:bg-purple-50 text-purple-700"
+                       }`}
+                     >
+                       <item.icon className={`h-4 w-4 ${isCollapsed ? "mx-auto" : "mr-3"}`} />
+                       {!isCollapsed && <span className="font-medium">{item.title}</span>}
+                     </SidebarMenuButton>
+                   </SidebarMenuItem>
+                 ))}
+               </SidebarMenu>
+             </SidebarGroupContent>
+           </SidebarGroup>
+         )}
+
+        {adminItems.filter(shouldShowMenuItem).length > 0 && (
+           <SidebarGroup>
+             <SidebarGroupLabel className="text-red-600 font-medium">
+               {!isCollapsed && "Administration"}
+             </SidebarGroupLabel>
+             <SidebarGroupContent>
+               <SidebarMenu>
+                 {adminItems.filter(shouldShowMenuItem).map((item) => (
+                   <SidebarMenuItem key={item.id}>
+                     <SidebarMenuButton
+                       onClick={() => handleNavigation(item.id)}
+                       className={`w-full transition-all duration-200 ${
+                         activeSection === item.id
+                           ? "bg-gradient-to-r from-red-500 to-red-600 text-white shadow-lg"
+                           : "hover:bg-red-50 text-red-700"
+                       }`}
+                     >
+                       <item.icon className={`h-4 w-4 ${isCollapsed ? "mx-auto" : "mr-3"}`} />
+                       {!isCollapsed && <span className="font-medium">{item.title}</span>}
+                     </SidebarMenuButton>
+                   </SidebarMenuItem>
+                 ))}
+               </SidebarMenu>
+             </SidebarGroupContent>
+           </SidebarGroup>
+         )}
 
         <SidebarGroup className="mt-auto">
           <SidebarGroupContent>
@@ -169,6 +325,39 @@ export function AppSidebar({ activeSection, setActiveSection, isAdmin }: AppSide
           </SidebarGroupContent>
         </SidebarGroup>
       </SidebarContent>
+      
+      <SidebarFooter className="border-t border-gray-200">
+        <div className="p-4 space-y-2">
+          {!isCollapsed && user && (
+            <div className="mb-3">
+              <div className="font-medium text-gray-900 text-sm truncate">
+                {user.full_name || user.email}
+              </div>
+              <div className="flex items-center gap-2 mt-1">
+                <span className={`text-xs px-2 py-1 rounded-full font-medium ${getRoleColor(userRole)}`}>
+                  {getRoleDisplayName(userRole)}
+                </span>
+                {user.department && (
+                  <span className="text-xs text-gray-500 truncate">
+                    {user.department}
+                  </span>
+                )}
+              </div>
+            </div>
+          )}
+          <SidebarMenu>
+            <SidebarMenuItem>
+              <SidebarMenuButton 
+                className="text-red-600 hover:bg-red-50 w-full"
+                onClick={handleLogout}
+              >
+                <LogOut className={`h-4 w-4 ${isCollapsed ? "mx-auto" : "mr-3"}`} />
+                {!isCollapsed && <span>Sign Out</span>}
+              </SidebarMenuButton>
+            </SidebarMenuItem>
+          </SidebarMenu>
+        </div>
+      </SidebarFooter>
     </Sidebar>
   );
 }

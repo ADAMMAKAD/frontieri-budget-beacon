@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { useToast } from '@/hooks/use-toast';
@@ -17,7 +17,11 @@ interface Notification {
   created_at: string;
 }
 
-const NotificationCenter = () => {
+interface NotificationCenterProps {
+  onNotificationUpdate?: () => void;
+}
+
+const NotificationCenter = ({ onNotificationUpdate }: NotificationCenterProps) => {
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const [loading, setLoading] = useState(true);
   const { toast } = useToast();
@@ -31,14 +35,8 @@ const NotificationCenter = () => {
 
   const fetchNotifications = async () => {
     try {
-      const { data, error } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', user?.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setNotifications(data || []);
+      const data = await apiClient.getNotifications(user?.id || '');
+      setNotifications(data?.notifications || data?.data || data || []);
     } catch (error) {
       console.error('Error fetching notifications:', error);
       toast({
@@ -53,18 +51,14 @@ const NotificationCenter = () => {
 
   const markAsRead = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .eq('id', id);
-
-      if (error) throw error;
+      await apiClient.markNotificationAsRead(id);
       
       setNotifications(prev => 
         prev.map(notif => 
           notif.id === id ? { ...notif, read: true } : notif
         )
       );
+      onNotificationUpdate?.();
     } catch (error) {
       console.error('Error marking notification as read:', error);
       toast({
@@ -77,14 +71,10 @@ const NotificationCenter = () => {
 
   const deleteNotification = async (id: string) => {
     try {
-      const { error } = await supabase
-        .from('notifications')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await apiClient.deleteNotification(id);
       
       setNotifications(prev => prev.filter(notif => notif.id !== id));
+      onNotificationUpdate?.();
       
       toast({
         title: "Success",
@@ -106,16 +96,12 @@ const NotificationCenter = () => {
       
       if (unreadIds.length === 0) return;
 
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .in('id', unreadIds);
-
-      if (error) throw error;
+      await apiClient.markAllNotificationsAsRead(unreadIds);
       
       setNotifications(prev => 
         prev.map(notif => ({ ...notif, read: true }))
       );
+      onNotificationUpdate?.();
       
       toast({
         title: "Success",
@@ -150,7 +136,7 @@ const NotificationCenter = () => {
     }
   };
 
-  const unreadCount = notifications.filter(n => !n.read).length;
+  const unreadCount = Array.isArray(notifications) ? notifications.filter(n => !n.read).length : 0;
 
   if (loading) {
     return (
@@ -181,7 +167,7 @@ const NotificationCenter = () => {
       </div>
 
       <div className="space-y-3">
-        {notifications.length === 0 ? (
+        {!Array.isArray(notifications) || notifications.length === 0 ? (
           <Card>
             <CardContent className="p-8 text-center">
               <Bell className="h-12 w-12 text-gray-400 mx-auto mb-4" />
@@ -237,4 +223,5 @@ const NotificationCenter = () => {
   );
 };
 
+export { NotificationCenter };
 export default NotificationCenter;

@@ -1,6 +1,5 @@
-
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,111 +7,53 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { useRole } from '@/hooks/useRole';
-import { Plus, Edit, Trash2, Building, Search } from 'lucide-react';
+import { Plus, Edit, Trash2, Building2, DollarSign, Calendar, Users, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface Project {
   id: string;
   name: string;
   description: string;
-  status: string;
   total_budget: number;
   allocated_budget: number;
   spent_budget: number;
+  status: string;
   start_date: string;
   end_date: string;
-  department: string;
-  team_id: string;
-  project_manager_id: string;
   created_at: string;
-}
-
-interface BusinessUnit {
-  id: string;
-  name: string;
+  manager_id?: string;
+  business_unit_id?: string;
 }
 
 export const AdminProjects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
-  const [filteredProjects, setFilteredProjects] = useState<Project[]>([]);
-  const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
-  const [projectAdmins, setProjectAdmins] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
   const [projectData, setProjectData] = useState({
     name: '',
     description: '',
-    status: 'planning',
     total_budget: 0,
-    department: '',
+    currency: 'USD',
+    status: 'planning',
     start_date: '',
-    end_date: '',
-    team_id: '',
-    project_manager_id: ''
+    end_date: ''
   });
   const { toast } = useToast();
-  const { isAdmin, canCreateProject, canAccessProject } = useRole();
 
   useEffect(() => {
-    fetchData();
+    fetchProjects();
   }, []);
 
-  useEffect(() => {
-    filterProjects();
-  }, [projects, searchTerm, statusFilter]);
-
-  const filterProjects = () => {
-    let filtered = projects;
-
-    if (searchTerm) {
-      filtered = filtered.filter(project =>
-        project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        project.department?.toLowerCase().includes(searchTerm.toLowerCase())
-      );
-    }
-
-    if (statusFilter !== 'all') {
-      filtered = filtered.filter(project => project.status === statusFilter);
-    }
-
-    setFilteredProjects(filtered);
-  };
-
-  const fetchData = async () => {
-    setLoading(true);
+  const fetchProjects = async () => {
     try {
-      // Get projects, business units, and project admins from Supabase
-      const [{ data: projectsList, error: projectsError }, { data: businessUnitsList, error: buError }, { data: usersList, error: usersError }] = await Promise.all([
-        supabase.from('projects').select('*').order('created_at', { ascending: false }),
-        supabase.from('business_units').select('*'),
-        supabase.from('profiles').select('*')
-      ]);
-
-      if (projectsError) throw projectsError;
-      if (buError) throw buError;
-      if (usersError) throw usersError;
-
-      let filteredProjects = projectsList || [];
-      if (!isAdmin) {
-        filteredProjects = filteredProjects.filter(project =>
-          canAccessProject(project.team_id, project.project_manager_id)
-        );
-      }
-
-      const projectAdminUsers = (usersList || []).filter(user =>
-        user.role === 'project_admin' || user.role === 'admin'
-      );
-
-      setProjects(filteredProjects);
-      setBusinessUnits(businessUnitsList || []);
-      setProjectAdmins(projectAdminUsers);
+      // Fetch all projects without pagination limit for admin dashboard
+      const data = await apiClient.getProjects({ limit: 1000 });
+      setProjects(data?.projects || []);
     } catch (error) {
       console.error('Error fetching projects:', error);
       toast({
@@ -128,32 +69,33 @@ export const AdminProjects = () => {
   const saveProject = async () => {
     try {
       if (editingProject) {
-        const { error } = await supabase
-          .from('projects')
-          .update(projectData)
-          .eq('id', editingProject.id);
-
-        if (error) throw error;
+        await apiClient.updateProject(editingProject.id, projectData);
 
         toast({
           title: "Success",
           description: "Project updated successfully"
         });
       } else {
-        const { error } = await supabase
-          .from('projects')
-          .insert([projectData]);
-
-        if (error) throw error;
+        await apiClient.createProject(projectData);
 
         toast({
           title: "Success",
-          description: "Project created successfully and project admin assigned"
+          description: "Project created successfully"
         });
       }
+
       setDialogOpen(false);
-      resetForm();
-      fetchData();
+      setEditingProject(null);
+      setProjectData({
+        name: '',
+        description: '',
+        total_budget: 0,
+        currency: 'USD',
+        status: 'planning',
+        start_date: '',
+        end_date: ''
+      });
+      fetchProjects();
     } catch (error: any) {
       console.error('Error saving project:', error);
       toast({
@@ -165,22 +107,15 @@ export const AdminProjects = () => {
   };
 
   const deleteProject = async (id: string) => {
-    if (!confirm('Are you sure you want to delete this project?')) return;
-
     try {
-      const { error } = await supabase
-        .from('projects')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await apiClient.deleteProject(id);
 
       toast({
         title: "Success",
         description: "Project deleted successfully"
       });
 
-      fetchData();
+      fetchProjects();
     } catch (error: any) {
       console.error('Error deleting project:', error);
       toast({
@@ -196,13 +131,10 @@ export const AdminProjects = () => {
     setProjectData({
       name: project.name,
       description: project.description || '',
-      status: project.status || 'planning',
-      total_budget: project.total_budget || 0,
-      department: project.department || '',
-      start_date: project.start_date || '',
-      end_date: project.end_date || '',
-      team_id: project.team_id || '',
-      project_manager_id: project.project_manager_id || ''
+      total_budget: project.total_budget,
+      status: project.status,
+      start_date: project.start_date ? project.start_date.split('T')[0] : '',
+      end_date: project.end_date ? project.end_date.split('T')[0] : ''
     });
     setDialogOpen(true);
   };
@@ -212,13 +144,10 @@ export const AdminProjects = () => {
     setProjectData({
       name: '',
       description: '',
-      status: 'planning',
       total_budget: 0,
-      department: '',
+      status: 'planning',
       start_date: '',
-      end_date: '',
-      team_id: '',
-      project_manager_id: ''
+      end_date: ''
     });
   };
 
@@ -228,27 +157,42 @@ export const AdminProjects = () => {
       case 'completed': return 'bg-blue-100 text-blue-800';
       case 'on-hold': return 'bg-yellow-100 text-yellow-800';
       case 'cancelled': return 'bg-red-100 text-red-800';
+      case 'planning': return 'bg-purple-100 text-purple-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  // Check if user has permission to manage projects
-  if (!canCreateProject() && !isAdmin) {
-    return (
-      <div className="space-y-6">
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-muted-foreground">You don't have permission to create projects. Only admins can create projects and assign project administrators.</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const getBudgetUtilization = (project: Project) => {
+    if (project.total_budget === 0) return 0;
+    return (project.spent_budget / project.total_budget) * 100;
+  };
+
+  // Pagination logic
+  const totalPages = Math.ceil(projects.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentProjects = projects.slice(startIndex, endIndex);
+
+  const goToPage = (page: number) => {
+    setCurrentPage(page);
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -258,174 +202,192 @@ export const AdminProjects = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Project Management</h2>
-          <p className="text-gray-600">Create projects and assign project administrators</p>
+          <p className="text-gray-600">Manage all projects and their budgets</p>
         </div>
-        {canCreateProject() && (
-          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
-            <DialogTrigger asChild>
-              <Button onClick={resetForm} className="bg-orange-600 hover:bg-orange-700">
-                <Plus className="mr-2 h-4 w-4" />
-                Add Project
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="max-w-2xl">
-              <DialogHeader>
-                <DialogTitle>
-                  {editingProject ? 'Edit Project' : 'Create New Project'}
-                </DialogTitle>
-                <DialogDescription>
-                  {editingProject ? 'Update project details' : 'Create a new project and assign a project administrator'}
-                </DialogDescription>
-              </DialogHeader>
-              <div className="grid gap-4 py-4">
-                <div className="grid gap-2">
-                  <Label htmlFor="name">Project Name</Label>
-                  <Input
-                    id="name"
-                    value={projectData.name}
-                    onChange={(e) => setProjectData({ ...projectData, name: e.target.value })}
-                  />
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="description">Description</Label>
-                  <Textarea
-                    id="description"
-                    value={projectData.description}
-                    onChange={(e) => setProjectData({ ...projectData, description: e.target.value })}
-                  />
-                </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="status">Status</Label>
-                    <Select value={projectData.status} onValueChange={(value) => setProjectData({ ...projectData, status: value })}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="planning">Planning</SelectItem>
-                        <SelectItem value="active">Active</SelectItem>
-                        <SelectItem value="on-hold">On Hold</SelectItem>
-                        <SelectItem value="completed">Completed</SelectItem>
-                        <SelectItem value="cancelled">Cancelled</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="department">Department</Label>
-                    <Input
-                      id="department"
-                      value={projectData.department}
-                      onChange={(e) => setProjectData({ ...projectData, department: e.target.value })}
-                    />
-                  </div>
-                </div>
-                <div className="grid gap-2">
-                  <Label htmlFor="team_id">Business Unit</Label>
-                  <Select value={projectData.team_id} onValueChange={(value) => setProjectData({ ...projectData, team_id: value })}>
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select business unit" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {businessUnits.filter(unit => unit.id && unit.id.trim() !== '').map((unit) => (
-                        <SelectItem key={unit.id} value={unit.id}>
-                          {unit.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
+        <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+          <DialogTrigger asChild>
+            <Button onClick={resetForm}>
+              <Plus className="mr-2 h-4 w-4" />
+              Add Project
+            </Button>
+          </DialogTrigger>
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>
+                {editingProject ? 'Edit Project' : 'Create New Project'}
+              </DialogTitle>
+              <DialogDescription>
+                {editingProject ? 'Update project details and budget' : 'Add a new project to the system'}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="grid gap-4 py-4">
+              <div className="grid gap-2">
+                <Label htmlFor="name">Project Name</Label>
+                <Input
+                  id="name"
+                  value={projectData.name}
+                  onChange={(e) => setProjectData({ ...projectData, name: e.target.value })}
+                />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="description">Description</Label>
+                <Textarea
+                  id="description"
+                  value={projectData.description}
+                  onChange={(e) => setProjectData({ ...projectData, description: e.target.value })}
+                />
+              </div>
+              <div className="grid grid-cols-3 gap-4">
                 <div className="grid gap-2">
                   <Label htmlFor="total_budget">Total Budget</Label>
                   <Input
                     id="total_budget"
                     type="number"
                     value={projectData.total_budget}
-                    onChange={(e) => setProjectData({ ...projectData, total_budget: Number(e.target.value) })}
+                    onChange={(e) => {
+                      let value = e.target.value;
+                      // Remove leading zeros but keep single zero
+                      if (value.length > 1 && value.startsWith('0') && !value.startsWith('0.')) {
+                        value = value.replace(/^0+/, '');
+                      }
+                      // If all zeros were removed, set to empty string
+                      if (value === '') {
+                        value = '';
+                      }
+                      setProjectData({ ...projectData, total_budget: value === '' ? 0 : Number(value) });
+                    }}
                   />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="grid gap-2">
-                    <Label htmlFor="start_date">Start Date</Label>
-                    <Input
-                      id="start_date"
-                      type="date"
-                      value={projectData.start_date}
-                      onChange={(e) => setProjectData({ ...projectData, start_date: e.target.value })}
-                    />
-                  </div>
-                  <div className="grid gap-2">
-                    <Label htmlFor="end_date">End Date</Label>
-                    <Input
-                      id="end_date"
-                      type="date"
-                      value={projectData.end_date}
-                      onChange={(e) => setProjectData({ ...projectData, end_date: e.target.value })}
-                    />
-                  </div>
-                </div>
                 <div className="grid gap-2">
-                  <Label htmlFor="project_manager_id">Project Administrator</Label>
-                  <Select value={projectData.project_manager_id} onValueChange={(value) => setProjectData({ ...projectData, project_manager_id: value })}>
+                  <Label htmlFor="currency">Currency</Label>
+                  <Select value={projectData.currency} onValueChange={(value) => setProjectData({ ...projectData, currency: value })}>
                     <SelectTrigger>
-                      <SelectValue placeholder="Select project administrator" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {projectAdmins.filter(admin => admin.id && admin.id.trim() !== '').map((admin) => (
-                        <SelectItem key={admin.id} value={admin.id}>
-                          {admin.full_name} ({admin.role})
-                        </SelectItem>
-                      ))}
+                      <SelectItem value="USD">USD ($)</SelectItem>
+                      <SelectItem value="ETB">Ethiopian Birr (ETB)</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="status">Status</Label>
+                  <Select value={projectData.status} onValueChange={(value) => setProjectData({ ...projectData, status: value })}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="planning">Planning</SelectItem>
+                      <SelectItem value="active">Active</SelectItem>
+                      <SelectItem value="on-hold">On Hold</SelectItem>
+                      <SelectItem value="completed">Completed</SelectItem>
+                      <SelectItem value="cancelled">Cancelled</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button onClick={saveProject} className="bg-orange-600 hover:bg-orange-700">
-                  {editingProject ? 'Update' : 'Create'} Project
-                </Button>
-              </DialogFooter>
-            </DialogContent>
-          </Dialog>
-        )}
+              <div className="grid grid-cols-2 gap-4">
+                <div className="grid gap-2">
+                  <Label htmlFor="start_date">Start Date</Label>
+                  <Input
+                    id="start_date"
+                    type="date"
+                    value={projectData.start_date}
+                    onChange={(e) => setProjectData({ ...projectData, start_date: e.target.value })}
+                  />
+                </div>
+                <div className="grid gap-2">
+                  <Label htmlFor="end_date">End Date</Label>
+                  <Input
+                    id="end_date"
+                    type="date"
+                    value={projectData.end_date}
+                    onChange={(e) => setProjectData({ ...projectData, end_date: e.target.value })}
+                  />
+                </div>
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button onClick={saveProject}>
+                {editingProject ? 'Update' : 'Create'} Project
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
       </div>
 
-      {/* Search and Filter Controls */}
-      <div className="flex flex-col sm:flex-row gap-4">
-        <div className="relative flex-1">
-          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
-          <Input
-            placeholder="Search projects by name, description, or department..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
-          />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-48">
-            <SelectValue placeholder="Filter by status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Status</SelectItem>
-            <SelectItem value="planning">Planning</SelectItem>
-            <SelectItem value="active">Active</SelectItem>
-            <SelectItem value="on-hold">On Hold</SelectItem>
-            <SelectItem value="completed">Completed</SelectItem>
-            <SelectItem value="cancelled">Cancelled</SelectItem>
-          </SelectContent>
-        </Select>
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Projects</CardTitle>
+            <Building2 className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{projects.length}</div>
+            <p className="text-xs text-muted-foreground">All projects</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {projects.filter(project => project.status === 'active').length}
+            </div>
+            <p className="text-xs text-muted-foreground">Currently active</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Budget</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ${projects.filter(project => project.status === 'active').reduce((sum, project) => {
+                // Convert ETB to USD if needed (ETB to USD rate: ~0.018)
+                const budget = project.total_budget || 0;
+                const currency = (project as any).currency || 'USD';
+                const rate = currency === 'ETB' ? 0.018 : 1;
+                return sum + (budget * rate);
+              }, 0).toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">Active projects only</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Spent</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              ${projects.filter(project => project.status === 'active').reduce((sum, project) => {
+                // Convert ETB to USD if needed (ETB to USD rate: ~0.018)
+                const spent = project.spent_budget || 0;
+                const currency = (project as any).currency || 'USD';
+                const rate = currency === 'ETB' ? 0.018 : 1;
+                return sum + (spent * rate);
+              }, 0).toLocaleString()}
+            </div>
+            <p className="text-xs text-muted-foreground">Active projects budget utilized</p>
+          </CardContent>
+        </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>
-            {isAdmin ? 'All Projects' : 'Your Team Projects'}
-          </CardTitle>
+          <CardTitle>Recent Projects</CardTitle>
           <CardDescription>
-            {isAdmin ? 'View and manage all projects in the system' : 'Projects you have access to'}
-            {filteredProjects.length !== projects.length && ` (${filteredProjects.length} of ${projects.length})`}
+            View and manage all projects in the system ({projects.length} total projects)
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -433,67 +395,130 @@ export const AdminProjects = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Department</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Budget</TableHead>
-                <TableHead>Progress</TableHead>
+                <TableHead>Spent</TableHead>
+                <TableHead>Utilization</TableHead>
+                <TableHead>Start Date</TableHead>
+                <TableHead>End Date</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredProjects.map((project) => (
-                <TableRow key={project.id}>
-                  <TableCell className="font-medium">{project.name}</TableCell>
-                  <TableCell>{project.department || 'N/A'}</TableCell>
-                  <TableCell>
-                    <Badge className={getStatusBadgeColor(project.status)}>
-                      {project.status}
-                    </Badge>
+              {projects.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8">
+                    <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No projects yet</h3>
+                    <p className="text-gray-600">Create your first project to get started</p>
                   </TableCell>
-                  <TableCell>${project.total_budget?.toLocaleString() || 0}</TableCell>
-                  <TableCell>
-                    {project.total_budget ? 
-                      `${Math.round((project.spent_budget / project.total_budget) * 100)}%` : 
-                      '0%'
-                    }
+                </TableRow>
+              ) : currentProjects.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={8} className="text-center py-8">
+                    <Building2 className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No projects found</h3>
+                    <p className="text-gray-600">No projects match the current page</p>
                   </TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => openEditDialog(project)}
-                      >
-                        <Edit className="h-4 w-4" />
-                      </Button>
-                      {isAdmin && (
+                </TableRow>
+              ) : (
+                currentProjects.map((project) => (
+                  <TableRow key={project.id}>
+                    <TableCell className="font-medium">{project.name}</TableCell>
+                    <TableCell>
+                      <Badge className={getStatusBadgeColor(project.status)}>
+                        {project.status}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>${project.total_budget.toLocaleString()}</TableCell>
+                    <TableCell>${(project.spent_budget || 0).toLocaleString()}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center space-x-2">
+                        <div className="w-16 bg-gray-200 rounded-full h-2">
+                          <div 
+                            className="bg-blue-600 h-2 rounded-full" 
+                            style={{ width: `${Math.min(getBudgetUtilization(project), 100)}%` }}
+                          ></div>
+                        </div>
+                        <span className="text-sm text-gray-600">
+                          {getBudgetUtilization(project).toFixed(1)}%
+                        </span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {project.start_date ? new Date(project.start_date).toLocaleDateString() : 'Not set'}
+                    </TableCell>
+                    <TableCell>
+                      {project.end_date ? new Date(project.end_date).toLocaleDateString() : 'Not set'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
                         <Button
-                          variant="destructive"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditDialog(project)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => deleteProject(project.id)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))
+              )}
             </TableBody>
           </Table>
           
-          {filteredProjects.length === 0 && (
-            <div className="text-center py-12">
-              <Building className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-              <h3 className="text-lg font-medium text-gray-900 mb-2">
-                {searchTerm || statusFilter !== 'all' ? 'No matching projects' : 'No projects found'}
-              </h3>
-              <p className="text-gray-600">
-                {searchTerm || statusFilter !== 'all' 
-                  ? 'Try adjusting your search criteria' 
-                  : 'Create your first project to get started'
-                }
-              </p>
+          {/* Pagination Controls */}
+          {projects.length > 0 && totalPages > 1 && (
+            <div className="flex items-center justify-between space-x-2 py-4">
+              <div className="flex items-center space-x-2">
+                <p className="text-sm text-gray-700">
+                  Showing {startIndex + 1} to {Math.min(endIndex, projects.length)} of {projects.length} projects
+                </p>
+              </div>
+              <div className="flex items-center space-x-2">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={goToPreviousPage}
+                  disabled={currentPage === 1}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  Previous
+                </Button>
+                
+                {/* Page Numbers */}
+                <div className="flex items-center space-x-1">
+                  {Array.from({ length: totalPages }, (_, i) => i + 1).map((page) => (
+                    <Button
+                      key={page}
+                      variant={currentPage === page ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => goToPage(page)}
+                      className="w-8 h-8 p-0"
+                    >
+                      {page}
+                    </Button>
+                  ))}
+                </div>
+                
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={goToNextPage}
+                  disabled={currentPage === totalPages}
+                >
+                  Next
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
           )}
         </CardContent>

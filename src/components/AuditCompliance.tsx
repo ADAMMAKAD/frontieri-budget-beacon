@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -38,12 +38,7 @@ const AuditCompliance = () => {
 
   const fetchAuditLogs = async () => {
     try {
-      const { data, error } = await supabase
-        .from('admin_activity_log')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
+      const data = await apiClient.request('/admin/activity-log?limit=100');
       setAuditLogs(data || []);
     } catch (error) {
       console.error('Error fetching audit logs:', error);
@@ -57,7 +52,7 @@ const AuditCompliance = () => {
     }
   };
 
-  const filteredLogs = auditLogs.filter(log => {
+  const filteredLogs = Array.isArray(auditLogs) ? auditLogs.filter(log => {
     const matchesSearch = 
       log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.target_table.toLowerCase().includes(searchTerm.toLowerCase()) ||
@@ -68,7 +63,7 @@ const AuditCompliance = () => {
     const matchesTable = tableFilter === 'all' || log.target_table === tableFilter;
 
     return matchesSearch && matchesAction && matchesTable;
-  });
+  }) : [];
 
   const clearFilters = () => {
     setSearchTerm('');
@@ -107,8 +102,8 @@ const AuditCompliance = () => {
   };
 
   // Get unique actions and tables for filters
-  const uniqueActions = [...new Set(auditLogs.map(log => log.action))];
-  const uniqueTables = [...new Set(auditLogs.map(log => log.target_table))];
+  const uniqueActions = [...new Set(Array.isArray(auditLogs) ? auditLogs.map(log => log.action) : [])];
+  const uniqueTables = [...new Set(Array.isArray(auditLogs) ? auditLogs.map(log => log.target_table) : [])];
 
   if (loading) {
     return (
@@ -191,7 +186,7 @@ const AuditCompliance = () => {
             <div className="flex items-center space-x-2">
               <FileCheck className="h-8 w-8 text-green-600" />
               <div>
-                <p className="text-2xl font-bold">{auditLogs.filter(log => log.action === 'create').length}</p>
+                <p className="text-2xl font-bold">{Array.isArray(auditLogs) ? auditLogs.filter(log => log.action === 'create').length : 0}</p>
                 <p className="text-sm text-gray-600">Creates</p>
               </div>
             </div>
@@ -203,7 +198,7 @@ const AuditCompliance = () => {
             <div className="flex items-center space-x-2">
               <Shield className="h-8 w-8 text-blue-600" />
               <div>
-                <p className="text-2xl font-bold">{auditLogs.filter(log => log.action === 'update').length}</p>
+                <p className="text-2xl font-bold">{Array.isArray(auditLogs) ? auditLogs.filter(log => log.action === 'update').length : 0}</p>
                 <p className="text-sm text-gray-600">Updates</p>
               </div>
             </div>
@@ -215,7 +210,7 @@ const AuditCompliance = () => {
             <div className="flex items-center space-x-2">
               <AlertTriangle className="h-8 w-8 text-red-600" />
               <div>
-                <p className="text-2xl font-bold">{auditLogs.filter(log => log.action === 'delete').length}</p>
+                <p className="text-2xl font-bold">{Array.isArray(auditLogs) ? auditLogs.filter(log => log.action === 'delete').length : 0}</p>
                 <p className="text-sm text-gray-600">Deletions</p>
               </div>
             </div>

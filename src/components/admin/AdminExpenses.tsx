@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -8,7 +8,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
-import { Check, X, DollarSign } from 'lucide-react';
+import { Check, X, DollarSign, ChevronLeft, ChevronRight, Edit } from 'lucide-react';
 
 interface Expense {
   id: string;
@@ -31,6 +31,9 @@ export const AdminExpenses = () => {
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState('all');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage] = useState(10);
+  const [editingExpense, setEditingExpense] = useState<string | null>(null);
   const { toast } = useToast();
   const { user, loading: authLoading } = useAuth();
 
@@ -47,35 +50,9 @@ export const AdminExpenses = () => {
     }
 
     try {
-      // First get expenses with projects
-      const { data: expensesData, error: expensesError } = await supabase
-        .from('expenses')
-        .select(`
-          *,
-          projects (name)
-        `)
-        .order('created_at', { ascending: false });
-
-      if (expensesError) throw expensesError;
-
-      // Then get profiles data separately
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, full_name');
-
-      if (profilesError) throw profilesError;
-
-      // Combine the data
-      const formattedExpenses = expensesData?.map(expense => {
-        const profile = profilesData?.find(p => p.id === expense.submitted_by);
-        return {
-          ...expense,
-          projects: expense.projects || null,
-          profiles: profile ? { full_name: profile.full_name || 'Unknown' } : null
-        };
-      }) || [];
-      
-      setExpenses(formattedExpenses);
+      // Get expenses with project and user details
+      const data = await apiClient.request('/admin/expenses');
+      setExpenses(data?.expenses || data?.data || data || []);
     } catch (error) {
       console.error('Error fetching expenses:', error);
       toast({
@@ -92,12 +69,10 @@ export const AdminExpenses = () => {
     if (!user) return;
 
     try {
-      const { error } = await supabase
-        .from('expenses')
-        .update({ status })
-        .eq('id', id);
-
-      if (error) throw error;
+      await apiClient.request(`/expenses/${id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status })
+      });
 
       toast({
         title: "Success",
@@ -124,9 +99,32 @@ export const AdminExpenses = () => {
     }
   };
 
-  const filteredExpenses = expenses.filter(expense => 
+  const filteredExpenses = Array.isArray(expenses) ? expenses.filter(expense => 
     statusFilter === 'all' || expense.status === statusFilter
-  );
+  ) : [];
+
+  // Pagination logic
+  const totalPages = Math.ceil(filteredExpenses.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const currentExpenses = filteredExpenses.slice(startIndex, endIndex);
+
+  const goToNextPage = () => {
+    if (currentPage < totalPages) {
+      setCurrentPage(currentPage + 1);
+    }
+  };
+
+  const goToPreviousPage = () => {
+    if (currentPage > 1) {
+      setCurrentPage(currentPage - 1);
+    }
+  };
+
+  // Reset to first page when filter changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [statusFilter]);
 
   // Show loading if auth is still loading
   if (authLoading) {
@@ -158,7 +156,7 @@ export const AdminExpenses = () => {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 p-6 bg-gray-50 min-h-screen">
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Expense Management</h2>
@@ -177,7 +175,7 @@ export const AdminExpenses = () => {
         </Select>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Total Expenses</CardTitle>
@@ -185,7 +183,7 @@ export const AdminExpenses = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${expenses.reduce((sum, exp) => sum + exp.amount, 0).toLocaleString()}
+              ${Array.isArray(expenses) ? expenses.reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0).toLocaleString() : '0'}
             </div>
             <p className="text-xs text-muted-foreground">All time</p>
           </CardContent>
@@ -198,7 +196,7 @@ export const AdminExpenses = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              {expenses.filter(exp => exp.status === 'pending').length}
+              {Array.isArray(expenses) ? expenses.filter(exp => exp.status === 'pending').length : 0}
             </div>
             <p className="text-xs text-muted-foreground">Require attention</p>
           </CardContent>
@@ -211,25 +209,65 @@ export const AdminExpenses = () => {
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">
-              ${expenses
+              ${Array.isArray(expenses) ? expenses
                 .filter(exp => 
                   exp.status === 'approved' && 
                   new Date(exp.created_at).getMonth() === new Date().getMonth()
                 )
-                .reduce((sum, exp) => sum + exp.amount, 0)
-                .toLocaleString()}
+                .reduce((sum, exp) => sum + parseFloat(exp.amount || 0), 0)
+                .toLocaleString() : '0'}
             </div>
             <p className="text-xs text-muted-foreground">Current month</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Rejected Expenses</CardTitle>
+            <X className="h-4 w-4 text-red-500" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold text-red-600">
+              {Array.isArray(expenses) ? expenses.filter(exp => exp.status === 'rejected').length : 0}
+            </div>
+            <p className="text-xs text-muted-foreground">Total rejected</p>
           </CardContent>
         </Card>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>All Expenses</CardTitle>
-          <CardDescription>
-            Review and approve expense submissions from all users
-          </CardDescription>
+          <div className="flex justify-between items-center">
+            <div>
+              <CardTitle>Recent Expenses</CardTitle>
+              <CardDescription>
+                Review and approve expense submissions from all users (Showing {currentExpenses.length} of {filteredExpenses.length} expenses)
+              </CardDescription>
+            </div>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToPreviousPage}
+                disabled={currentPage === 1}
+              >
+                <ChevronLeft className="h-4 w-4" />
+                Previous
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={goToNextPage}
+                disabled={currentPage === totalPages}
+              >
+                Next
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
         </CardHeader>
         <CardContent>
           <Table>
@@ -245,43 +283,94 @@ export const AdminExpenses = () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredExpenses.map((expense) => (
-                <TableRow key={expense.id}>
-                  <TableCell className="font-medium">{expense.description}</TableCell>
-                  <TableCell>${expense.amount.toLocaleString()}</TableCell>
-                  <TableCell>{expense.profiles?.full_name || 'Unknown'}</TableCell>
-                  <TableCell>{expense.projects?.name || 'No Project'}</TableCell>
-                  <TableCell>
-                    <Badge className={getStatusBadgeColor(expense.status)}>
-                      {expense.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {new Date(expense.expense_date).toLocaleDateString()}
-                  </TableCell>
-                  <TableCell>
-                    {expense.status === 'pending' && (
-                      <div className="flex space-x-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => updateExpenseStatus(expense.id, 'approved')}
-                          className="text-green-600 hover:text-green-700"
-                        >
-                          <Check className="h-4 w-4" />
-                        </Button>
-                        <Button
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => updateExpenseStatus(expense.id, 'rejected')}
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    )}
+              {currentExpenses.length > 0 ? (
+                currentExpenses.map((expense) => (
+                  <TableRow key={expense.id}>
+                    <TableCell className="font-medium">{expense.description}</TableCell>
+                    <TableCell>${expense.amount.toLocaleString()}</TableCell>
+                    <TableCell>{expense.submitted_by_name || 'Unknown User'}</TableCell>
+                    <TableCell>{expense.project_name || 'No Project Assigned'}</TableCell>
+                    <TableCell>
+                      <Badge className={getStatusBadgeColor(expense.status)}>
+                        {expense.status.charAt(0).toUpperCase() + expense.status.slice(1)}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {new Date(expense.expense_date).toLocaleDateString()}
+                    </TableCell>
+                    <TableCell>
+                      {editingExpense === expense.id ? (
+                        <div className="flex space-x-2">
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => {
+                              updateExpenseStatus(expense.id, 'approved');
+                              setEditingExpense(null);
+                            }}
+                            className="text-green-600 hover:text-green-700"
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="destructive"
+                            size="sm"
+                            onClick={() => {
+                              updateExpenseStatus(expense.id, 'rejected');
+                              setEditingExpense(null);
+                            }}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEditingExpense(null)}
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="flex space-x-2">
+                          {expense.status === 'pending' && (
+                            <>
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                onClick={() => updateExpenseStatus(expense.id, 'approved')}
+                                className="text-green-600 hover:text-green-700"
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                variant="destructive"
+                                size="sm"
+                                onClick={() => updateExpenseStatus(expense.id, 'rejected')}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </>
+                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => setEditingExpense(expense.id)}
+                            className="text-blue-600 hover:text-blue-700"
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                ))
+              ) : (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
+                    No expenses found for the selected filter.
                   </TableCell>
                 </TableRow>
-              ))}
+              )}
             </TableBody>
           </Table>
         </CardContent>

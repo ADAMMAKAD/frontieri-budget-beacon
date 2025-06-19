@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
@@ -28,14 +28,8 @@ export const AdminActivityLog = () => {
 
   const fetchActivities = async () => {
     try {
-      const { data, error } = await supabase
-        .from('admin_activity_log')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(100);
-
-      if (error) throw error;
-      setActivities(data || []);
+      const response = await apiClient.get('/admin/activity-log?limit=100');
+      setActivities(response.data || []);
     } catch (error) {
       console.error('Error fetching activity log:', error);
       toast({

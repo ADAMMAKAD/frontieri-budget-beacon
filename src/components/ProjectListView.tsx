@@ -1,6 +1,12 @@
 
-import { Progress } from "@/components/ui/progress";
-import { Badge } from "@/components/ui/badge";
+import React from 'react';
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Progress } from '@/components/ui/progress';
+import { Calendar, DollarSign, Users, MoreHorizontal, Edit, Trash2, Eye, Shield, Lock } from 'lucide-react';
+
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { CheckCircle, AlertTriangle } from "lucide-react";
 import { useCurrency } from "@/contexts/CurrencyContext";
 
@@ -18,6 +24,7 @@ interface ProjectListViewProps {
 
 export const ProjectListView = ({ projects }: ProjectListViewProps) => {
   const { formatCurrency } = useCurrency();
+
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -53,9 +60,14 @@ export const ProjectListView = ({ projects }: ProjectListViewProps) => {
                 <h4 className="font-medium">{project.name}</h4>
                 {getStatusIcon(project.status)}
               </div>
-              <Badge variant="outline" className={getStatusColor(project.status)}>
-                {project.status.replace("-", " ").toUpperCase()}
-              </Badge>
+              <div className="flex items-center space-x-2">
+                <Badge variant="outline" className={getStatusColor(project.status)}>
+                  {project.status.replace("-", " ").toUpperCase()}
+                </Badge>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0">
+                  <Edit className="h-3 w-3" />
+                </Button>
+              </div>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-center">
               <div className="space-y-1">

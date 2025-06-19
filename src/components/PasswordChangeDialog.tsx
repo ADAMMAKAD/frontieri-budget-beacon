@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { useToast } from '@/hooks/use-toast';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/lib/api';
 import { Eye, EyeOff } from 'lucide-react';
 
 export function PasswordChangeDialog() {
@@ -39,11 +39,13 @@ export function PasswordChangeDialog() {
 
     setLoading(true);
     try {
-      const { error } = await supabase.auth.updateUser({
-        password: newPassword
+      await apiClient.request('/auth/change-password', {
+        method: 'PUT',
+        body: JSON.stringify({
+          currentPassword,
+          newPassword
+        })
       });
-
-      if (error) throw error;
 
       toast({
         title: "Success",

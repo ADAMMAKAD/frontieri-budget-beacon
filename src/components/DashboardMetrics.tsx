@@ -1,5 +1,5 @@
 
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
@@ -16,6 +16,8 @@ import {
   Calendar
 } from 'lucide-react';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { apiClient } from '@/lib/api';
+import { useAuth } from '@/hooks/useAuth';
 
 interface MetricCardProps {
   title: string;
@@ -90,67 +92,101 @@ const MetricCard: React.FC<MetricCardProps> = ({
 
 export const DashboardMetrics: React.FC = () => {
   const { formatCurrency } = useCurrency();
+  const { user } = useAuth();
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    fetchDashboardData();
+  }, []);
+
+  const fetchDashboardData = async () => {
+    try {
+      const data = await apiClient.getDashboardMetrics();
+      setDashboardData(data);
+    } catch (error) {
+      console.error('Error fetching dashboard data:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {[...Array(6)].map((_, i) => (
+          <Card key={i} className="animate-pulse">
+            <CardContent className="p-6">
+              <div className="h-4 bg-gray-200 rounded w-3/4 mb-2"></div>
+              <div className="h-8 bg-gray-200 rounded w-1/2 mb-2"></div>
+              <div className="h-3 bg-gray-200 rounded w-full"></div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    );
+  }
 
   const metrics = [
     {
       title: "Total Budget",
-      value: formatCurrency(2450000),
-      change: "+12.5%",
-      trend: "up" as const,
+      value: formatCurrency(dashboardData?.total_budget || 0),
+      change: dashboardData?.budget_utilization ? `${dashboardData.budget_utilization.toFixed(1)}% utilized` : "0% utilized",
+      trend: (dashboardData?.budget_utilization || 0) > 75 ? "up" as const : "neutral" as const,
       description: "Across all active projects",
       icon: <DollarSign className="h-5 w-5 text-white" />,
       color: "bg-gradient-to-r from-blue-500 to-blue-600",
-      progress: 75
+      progress: dashboardData?.budget_utilization || 0
     },
     {
       title: "Active Projects",
-      value: "24",
-      change: "+3",
-      trend: "up" as const,
+      value: dashboardData?.active_projects?.toString() || "0",
+      change: `${dashboardData?.total_projects || 0} total`,
+      trend: (dashboardData?.active_projects || 0) > 0 ? "up" as const : "neutral" as const,
       description: "Currently in progress",
       icon: <Building2 className="h-5 w-5 text-white" />,
       color: "bg-gradient-to-r from-green-500 to-green-600",
-      progress: 85
+      progress: dashboardData?.total_projects > 0 ? (dashboardData.active_projects / dashboardData.total_projects * 100) : 0
     },
     {
-      title: "Team Members",
-      value: "156",
-      change: "+12",
-      trend: "up" as const,
-      description: "Across all departments",
-      icon: <Users className="h-5 w-5 text-white" />,
+      title: "Total Spent",
+      value: formatCurrency(dashboardData?.total_spent || 0),
+      change: `of ${formatCurrency(dashboardData?.total_budget || 0)}`,
+      trend: (dashboardData?.budget_utilization || 0) < 90 ? "up" as const : "down" as const,
+      description: "Budget consumption",
+      icon: <Target className="h-5 w-5 text-white" />,
       color: "bg-gradient-to-r from-purple-500 to-purple-600",
-      progress: 92
+      progress: dashboardData?.budget_utilization || 0
     },
     {
       title: "Budget Utilization",
-      value: "77%",
-      change: "+5.3%",
-      trend: "up" as const,
-      description: "Year-to-date performance",
+      value: `${(dashboardData?.budget_utilization || 0).toFixed(1)}%`,
+      change: dashboardData?.budget_utilization > 75 ? "High utilization" : "Good utilization",
+      trend: (dashboardData?.budget_utilization || 0) > 90 ? "down" as const : "up" as const,
+      description: "Overall performance",
       icon: <Target className="h-5 w-5 text-white" />,
       color: "bg-gradient-to-r from-orange-500 to-orange-600",
-      progress: 77
+      progress: dashboardData?.budget_utilization || 0
     },
     {
-      title: "Pending Approvals",
-      value: "8",
-      change: "-2",
-      trend: "down" as const,
-      description: "Awaiting review",
-      icon: <Clock className="h-5 w-5 text-white" />,
-      color: "bg-gradient-to-r from-yellow-500 to-yellow-600",
-      progress: 40
-    },
-    {
-      title: "Completed Milestones",
-      value: "142",
-      change: "+18",
-      trend: "up" as const,
-      description: "This quarter",
+      title: "Completed Projects",
+      value: dashboardData?.completed_projects?.toString() || "0",
+      change: `${dashboardData?.on_hold_projects || 0} on hold`,
+      trend: (dashboardData?.completed_projects || 0) > 0 ? "up" as const : "neutral" as const,
+      description: "Successfully finished",
       icon: <CheckCircle2 className="h-5 w-5 text-white" />,
-      color: "bg-gradient-to-r from-teal-500 to-teal-600",
-      progress: 88
+      color: "bg-gradient-to-r from-yellow-500 to-yellow-600",
+      progress: dashboardData?.total_projects > 0 ? (dashboardData.completed_projects / dashboardData.total_projects * 100) : 0
+    },
+    {
+      title: "Delayed Projects",
+      value: dashboardData?.delayed_projects?.toString() || "0",
+      change: dashboardData?.delayed_projects > 0 ? "Needs attention" : "On schedule",
+      trend: (dashboardData?.delayed_projects || 0) > 0 ? "down" as const : "up" as const,
+      description: "Past due date",
+      icon: <AlertTriangle className="h-5 w-5 text-white" />,
+      color: "bg-gradient-to-r from-red-500 to-red-600",
+      progress: dashboardData?.total_projects > 0 ? (dashboardData.delayed_projects / dashboardData.total_projects * 100) : 0
     },
     {
       title: "Risk Alerts",

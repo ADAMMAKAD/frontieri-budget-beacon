@@ -15,6 +15,7 @@ interface Project {
   total_budget: number;
   spent_budget: number;
   allocated_budget?: number;
+  currency?: string;
   start_date?: string;
   end_date?: string;
   department?: string;
@@ -128,18 +129,18 @@ export const ProjectDetailsModal: React.FC<ProjectDetailsModalProps> = ({
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-muted-foreground">Total Budget</p>
-                    <p className="text-2xl font-bold">{formatCurrency(project.total_budget)}</p>
+                    <p className="text-2xl font-bold">{formatCurrency(project.total_budget, project.currency)}</p>
                   </div>
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-muted-foreground">Spent Amount</p>
                     <p className={`text-2xl font-bold ${getBudgetStatusColor()}`}>
-                      {formatCurrency(project.spent_budget)}
+                      {formatCurrency(project.spent_budget, project.currency)}
                     </p>
                   </div>
                   <div className="space-y-2">
                     <p className="text-sm font-medium text-muted-foreground">Remaining</p>
                     <p className="text-2xl font-bold text-blue-600">
-                      {formatCurrency(project.total_budget - project.spent_budget)}
+                      {formatCurrency(project.total_budget - project.spent_budget, project.currency)}
                     </p>
                   </div>
                 </div>
