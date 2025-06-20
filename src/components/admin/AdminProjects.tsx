@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,8 +27,14 @@ interface Project {
   business_unit_id?: string;
 }
 
+interface BusinessUnit {
+  id: string;
+  name: string;
+}
+
 export const AdminProjects = () => {
   const [projects, setProjects] = useState<Project[]>([]);
+  const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<Project | null>(null);
@@ -41,12 +47,14 @@ export const AdminProjects = () => {
     currency: 'USD',
     status: 'planning',
     start_date: '',
-    end_date: ''
+    end_date: '',
+    business_unit_id: ''
   });
   const { toast } = useToast();
 
   useEffect(() => {
     fetchProjects();
+    fetchBusinessUnits();
   }, []);
 
   const fetchProjects = async () => {
@@ -63,6 +71,22 @@ export const AdminProjects = () => {
       });
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchBusinessUnits = async () => {
+    try {
+      const data = await apiClient.getBusinessUnits();
+      setBusinessUnits(Array.isArray(data) ? data : []);
+    } catch (error) {
+      console.error('Error fetching business units:', error);
+      // Fallback to hardcoded values if API fails
+      setBusinessUnits([
+        { id: '1', name: 'Elixone Tech' },
+        { id: '2', name: 'Capra communication' },
+        { id: '3', name: 'Vasta Talent' },
+        { id: '4', name: 'WASH' }
+      ]);
     }
   };
 
@@ -93,7 +117,8 @@ export const AdminProjects = () => {
         currency: 'USD',
         status: 'planning',
         start_date: '',
-        end_date: ''
+        end_date: '',
+        business_unit_id: ''
       });
       fetchProjects();
     } catch (error: any) {
@@ -132,9 +157,11 @@ export const AdminProjects = () => {
       name: project.name,
       description: project.description || '',
       total_budget: project.total_budget,
+      currency: (project as any).currency || 'USD',
       status: project.status,
       start_date: project.start_date ? project.start_date.split('T')[0] : '',
-      end_date: project.end_date ? project.end_date.split('T')[0] : ''
+      end_date: project.end_date ? project.end_date.split('T')[0] : '',
+      business_unit_id: project.business_unit_id || ''
     });
     setDialogOpen(true);
   };
@@ -145,9 +172,11 @@ export const AdminProjects = () => {
       name: '',
       description: '',
       total_budget: 0,
+      currency: 'USD',
       status: 'planning',
       start_date: '',
-      end_date: ''
+      end_date: '',
+      business_unit_id: ''
     });
   };
 
@@ -236,6 +265,22 @@ export const AdminProjects = () => {
                   value={projectData.description}
                   onChange={(e) => setProjectData({ ...projectData, description: e.target.value })}
                 />
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="business_unit">Business Unit</Label>
+                <Select 
+                  value={projectData.business_unit_id} 
+                  onValueChange={(value) => setProjectData({ ...projectData, business_unit_id: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select business unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {businessUnits.map(unit => (
+                      <SelectItem key={unit.id} value={unit.id}>{unit.name}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
               <div className="grid grid-cols-3 gap-4">
                 <div className="grid gap-2">
