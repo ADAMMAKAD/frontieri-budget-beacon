@@ -93,7 +93,7 @@ const AdminDashboard = () => {
       // If the endpoint doesn't exist, we'll fetch data separately
       const [projectsResult, expensesResult] = await Promise.all([
         apiClient.getProjects(),
-        apiClient.request('/expenses') // Generic expenses endpoint
+        apiClient.get('/api/expenses') // Correct expenses endpoint
       ]);
   
       const projects = projectsResult.projects || [];
@@ -259,9 +259,14 @@ const AdminDashboard = () => {
             </p>
             {!loading && Object.keys(stats.currencyBreakdown).length > 1 && (
               <p className="text-xs text-muted-foreground mt-1">
-                Breakdown: {Object.entries(stats.currencyBreakdown).map(([currency, amount]) => 
-                  `${currency === 'USD' ? '$' : 'ETB '}${amount.toLocaleString()} ${currency}`
-                ).join(' + ')}
+                Breakdown: {Object.entries(stats.currencyBreakdown).map(([currency, amount]) => {
+                  const validAmount = Number(amount) || 0;
+                  if (currency === 'USD') {
+                    return `$${validAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USD`;
+                  } else {
+                    return `ETB ${validAmount.toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} ETB`;
+                  }
+                }).join(' + ')}
               </p>
             )}
           </CardContent>

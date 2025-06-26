@@ -23,7 +23,8 @@ import {
   ArrowUpRight,
   ArrowDownRight,
   Eye,
-  Filter
+  Filter,
+  RefreshCw
 } from 'lucide-react';
 import { useCurrency } from '@/contexts/CurrencyContext';
 import { apiClient } from '@/lib/api';
@@ -68,112 +69,73 @@ export function AdvancedAnalyticsDashboard() {
   const [riskAlerts, setRiskAlerts] = useState<RiskAlert[]>([]);
   const [predictiveInsights, setPredictiveInsights] = useState<PredictiveInsight[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [activeTab, setActiveTab] = useState('overview');
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
 
   useEffect(() => {
     fetchAnalyticsData();
-    generateMockRiskAlerts();
-    generateMockPredictiveInsights();
+    fetchRiskAlerts();
+    fetchPredictiveInsights();
   }, []);
 
   const fetchAnalyticsData = async () => {
     try {
-      // Fetch real data from API endpoints
-      const [dashboardData, projectsData] = await Promise.all([
-        apiClient.getDashboardMetrics(),
-        apiClient.getProjects()
-      ]);
-      
-      const projects = projectsData.projects || [];
-      const totalMilestones = projects.reduce((sum, p) => sum + (p.milestones?.length || 0), 0);
-      const completedMilestones = projects.reduce((sum, p) => 
-        sum + (p.milestones?.filter(m => m.status === 'completed')?.length || 0), 0);
+      // Fetch comprehensive analytics data from the new analytics endpoint
+      const analyticsData = await apiClient.getAnalyticsDashboard();
       
       const realData: AnalyticsData = {
-        totalBudget: dashboardData?.total_budget || 0,
-        spentBudget: dashboardData?.total_spent || 0,
-        projectedSpend: (dashboardData?.total_spent || 0) * 1.15, // Estimate 15% more spending
-        riskScore: Math.min(100, (dashboardData?.budget_utilization || 0) > 90 ? 75 : 25),
-        efficiency: Math.max(0, 100 - (dashboardData?.budget_utilization || 0)),
-        roi: dashboardData?.total_budget > 0 ? 
-          ((dashboardData.total_budget - dashboardData.total_spent) / dashboardData.total_budget * 100) : 0,
-        activeProjects: dashboardData?.active_projects || 0,
-        completedMilestones: completedMilestones,
-        upcomingDeadlines: Math.max(0, totalMilestones - completedMilestones),
-        budgetVariance: dashboardData?.budget_utilization > 100 ? 
-          (dashboardData.budget_utilization - 100) : -(100 - (dashboardData?.budget_utilization || 0)),
-        teamUtilization: Math.min(100, (dashboardData?.active_projects || 0) * 8), // Estimate based on active projects
-        costPerMilestone: completedMilestones > 0 ? (dashboardData?.total_spent || 0) / completedMilestones : 0
+        totalBudget: analyticsData?.total_budget || 0,
+        spentBudget: analyticsData?.total_spent || 0,
+        projectedSpend: analyticsData?.projected_spend || 0,
+        riskScore: analyticsData?.risk_score || 0,
+        efficiency: analyticsData?.efficiency_score || 0,
+        roi: analyticsData?.roi || 0,
+        activeProjects: analyticsData?.active_projects || 0,
+        completedMilestones: analyticsData?.completed_milestones || 0,
+        upcomingDeadlines: analyticsData?.in_progress_milestones || 0,
+        budgetVariance: analyticsData?.budget_utilization > 100 ? 
+          (analyticsData.budget_utilization - 100) : -(100 - (analyticsData?.budget_utilization || 0)),
+        teamUtilization: analyticsData?.team_utilization || 0,
+        costPerMilestone: analyticsData?.cost_per_milestone || 0
       };
       setAnalyticsData(realData);
+      setLastUpdated(new Date());
     } catch (error) {
       console.error('Error fetching analytics data:', error);
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
-  const generateMockRiskAlerts = () => {
-    const alerts: RiskAlert[] = [
-      {
-        id: '1',
-        type: 'budget',
-        severity: 'high',
-        message: 'Project Alpha budget variance exceeds 15%',
-        impact: 'Potential $150K overspend',
-        recommendation: 'Review resource allocation and scope',
-        probability: 85
-      },
-      {
-        id: '2',
-        type: 'timeline',
-        severity: 'medium',
-        message: 'Q4 deliverables at risk due to resource constraints',
-        impact: '2-week delay possible',
-        recommendation: 'Consider additional resources or scope adjustment',
-        probability: 65
-      },
-      {
-        id: '3',
-        type: 'resource',
-        severity: 'low',
-        message: 'Team utilization below optimal threshold',
-        impact: 'Reduced efficiency',
-        recommendation: 'Redistribute workload or consider new projects',
-        probability: 40
-      }
-    ];
-    setRiskAlerts(alerts);
+  const fetchRiskAlerts = async () => {
+    try {
+      const risksData = await apiClient.getAnalyticsRisks();
+      setRiskAlerts(risksData.risks || []);
+    } catch (error) {
+      console.error('Error fetching risk alerts:', error);
+      setRiskAlerts([]);
+    }
   };
 
-  const generateMockPredictiveInsights = () => {
-    const insights: PredictiveInsight[] = [
-      {
-        id: '1',
-        category: 'budget',
-        prediction: 'Based on current trends, you\'ll finish 8% under budget',
-        confidence: 78,
-        timeframe: 'End of Q4 2024',
-        actionable: true
-      },
-      {
-        id: '2',
-        category: 'timeline',
-        prediction: 'Project Beta likely to complete 1 week early',
-        confidence: 82,
-        timeframe: 'Next 30 days',
-        actionable: true
-      },
-      {
-        id: '3',
-        category: 'performance',
-        prediction: 'Team productivity expected to increase by 12%',
-        confidence: 71,
-        timeframe: 'Next quarter',
-        actionable: false
-      }
-    ];
-    setPredictiveInsights(insights);
+  const fetchPredictiveInsights = async () => {
+    try {
+      const insightsData = await apiClient.getAnalyticsInsights();
+      setPredictiveInsights(insightsData.insights || []);
+    } catch (error) {
+      console.error('Error fetching predictive insights:', error);
+      setPredictiveInsights([]);
+    }
+  };
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    await Promise.all([
+      fetchAnalyticsData(),
+      fetchRiskAlerts(),
+      fetchPredictiveInsights()
+    ]);
   };
 
   const getSeverityColor = (severity: string) => {
@@ -220,8 +182,22 @@ export function AdvancedAnalyticsDashboard() {
             Advanced Analytics
           </h1>
           <p className="text-gray-600 mt-1">AI-powered insights and predictive analytics</p>
+          {lastUpdated && (
+            <p className="text-sm text-gray-500 mt-1">
+              Last updated: {lastUpdated.toLocaleTimeString()}
+            </p>
+          )}
         </div>
         <div className="flex gap-2">
+          <Button 
+            variant="outline" 
+            size="sm" 
+            onClick={handleRefresh}
+            disabled={refreshing}
+          >
+            <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? 'animate-spin' : ''}`} />
+            {refreshing ? 'Refreshing...' : 'Refresh'}
+          </Button>
           <Button variant="outline" size="sm">
             <Filter className="h-4 w-4 mr-2" />
             Filters

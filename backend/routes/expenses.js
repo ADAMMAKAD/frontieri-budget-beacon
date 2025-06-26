@@ -2,6 +2,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const pool = require('../config/database');
 const { authenticateToken, requireRole } = require('../middleware/auth');
+const { notifyNewExpenseSubmission, notifyExpenseStatusChange } = require('../utils/notificationHelper');
 
 const router = express.Router();
 
@@ -95,6 +96,58 @@ router.get('/', authenticateToken, async (req, res) => {
     } catch (error) {
         console.error('Get expenses error:', error);
         res.status(500).json({ error: 'Failed to get expenses' });
+    }
+});
+
+// Get single expense by ID
+router.get('/:id', authenticateToken, async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        const query = `
+            SELECT e.*, p.name as project_name, 
+                   u1.full_name as submitted_by_name,
+                   u2.full_name as approved_by_name,
+                   bc.name as category_name
+            FROM expenses e
+            LEFT JOIN projects p ON e.project_id = p.id
+            LEFT JOIN users u1 ON e.submitted_by = u1.id
+            LEFT JOIN users u2 ON e.approved_by = u2.id
+            LEFT JOIN budget_categories bc ON e.category_id = bc.id
+            WHERE e.id = $1
+        `;
+        
+        const result = await pool.query(query, [id]);
+        
+        if (result.rows.length === 0) {
+            return res.status(404).json({ error: 'Expense not found' });
+        }
+        
+        const expense = result.rows[0];
+        
+        // Check if user has access to this expense
+        if (req.user.role !== 'admin') {
+            const accessCheck = await pool.query(
+                `SELECT 1 FROM expenses e
+                 LEFT JOIN projects p ON e.project_id = p.id
+                 LEFT JOIN project_teams pt ON p.id = pt.project_id
+                 WHERE e.id = $1 AND (
+                     e.submitted_by = $2 OR 
+                     p.project_manager_id = $2 OR 
+                     pt.user_id = $2
+                 )`,
+                [id, req.user.id]
+            );
+            
+            if (accessCheck.rows.length === 0) {
+                return res.status(403).json({ error: 'Not authorized to view this expense' });
+            }
+        }
+        
+        res.json({ expense });
+    } catch (error) {
+        console.error('Get expense by ID error:', error);
+        res.status(500).json({ error: 'Failed to get expense' });
     }
 });
 
@@ -205,6 +258,14 @@ router.post('/', authenticateToken, [
              VALUES ($1, $2, $3, $4, $5, $6) RETURNING *`,
             [project_id, category_id, description, amount, expense_date || new Date(), req.user.id]
         );
+
+        // Send notification to project admins about new expense
+        try {
+            await notifyNewExpenseSubmission(result.rows[0].id);
+        } catch (notificationError) {
+            console.error('Failed to send expense notification:', notificationError);
+            // Don't fail the expense creation if notification fails
+        }
 
         res.status(201).json({ expense: result.rows[0] });
     } catch (error) {

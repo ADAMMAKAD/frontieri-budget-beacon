@@ -1,0 +1,1 @@
+/Library/PostgreSQL/15/bin/postgres "-D" "postgres_data_new"

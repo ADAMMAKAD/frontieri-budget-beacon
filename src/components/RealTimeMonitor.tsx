@@ -159,7 +159,7 @@ export function RealTimeMonitor() {
   const initializeTransactions = async () => {
     try {
       // Fetch recent expenses or project activities
-      const expensesData = await apiClient.request('/expenses?limit=5');
+      const expensesData = await apiClient.request('/api/expenses?limit=5');
         const expenses = expensesData.expenses || expensesData.data || [];
       
       const transactions: LiveTransaction[] = expenses.map((expense: any, index: number) => ({
@@ -205,7 +205,7 @@ export function RealTimeMonitor() {
   const addNewTransaction = async () => {
     if (Math.random() < 0.3) { // 30% chance of new transaction
       try {
-        const response = await apiClient.request('/expenses?limit=1');
+        const response = await apiClient.request('/api/expenses?limit=1');
         if (response.data && response.data.length > 0) {
           const expense = response.data[0];
           const newTransaction: LiveTransaction = {

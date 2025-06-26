@@ -1,10 +1,10 @@
 // src/lib/api.ts
 
 // Use environment variable for API URL, fallback to localhost
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001/api';
+const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:3001';
 
 class ApiClient {
-  private getAuthHeaders() {
+  private getAuthHeaders(): Record<string, string> {
     const token = localStorage.getItem('auth_token');
     console.log('🔑 API Auth Headers:', {
       hasToken: !!token,
@@ -111,64 +111,69 @@ class ApiClient {
   // Projects
   async getProjects(params: Record<string, any> = {}) {
     const qs = new URLSearchParams(params).toString();
-    return this.request(`/projects${qs ? `?${qs}` : ''}`);
+    return this.request(`/api/projects${qs ? `?${qs}` : ''}`);
   }
   async getProject(id: string) {
-    return this.request(`/projects/${id}`);
+    return this.request(`/api/projects/${id}`);
   }
   async createProject(project: any) {
-    return this.request('/projects', {
+    return this.request('/api/projects', {
       method: 'POST',
       body: JSON.stringify(project),
     });
   }
   async updateProject(id: string, updates: any) {
-    return this.request(`/projects/${id}`, {
+    return this.request(`/api/projects/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
   }
   async deleteProject(id: string) {
-    return this.request(`/projects/${id}`, { method: 'DELETE' });
+    return this.request(`/api/projects/${id}`, { method: 'DELETE' });
   }
   async getDashboardMetrics() {
-    return this.request('/projects/dashboard/metrics');
+    return this.request('/api/projects/dashboard/metrics');
   }
 
   // Business Units
   async getBusinessUnits() {
-    const response = await this.request('/business-units');
-    // Extract business_units array from the response object
-    return response.business_units || [];
+    const response = await this.request('/api/business-units');
+    return response;
   }
-  async createBusinessUnit(bu: any) {
-    return this.request('/business-units', {
+  async createBusinessUnit(unit: any) {
+    return this.request('/api/business-units', {
       method: 'POST',
-      body: JSON.stringify(bu),
+      body: JSON.stringify(unit),
     });
   }
   async updateBusinessUnit(id: string, updates: any) {
-    return this.request(`/business-units/${id}`, {
+    return this.request(`/api/business-units/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
   }
   async deleteBusinessUnit(id: string) {
-    return this.request(`/business-units/${id}`, { method: 'DELETE' });
+    return this.request(`/api/business-units/${id}`, { method: 'DELETE' });
   }
 
   // Project Teams
-  async getProjectTeams() {
-    return this.request('/project-teams');
+  async getProjectTeams(projectId: string) {
+    return this.request(`/api/project-teams?project_id=${projectId}`);
   }
-  async addTeamMember(member: any) {
-    return this.request('/project-teams', {
+  async createProjectTeam(team: any) {
+    return this.request('/api/project-teams', {
       method: 'POST',
-      body: JSON.stringify(member),
+      body: JSON.stringify(team),
     });
   }
-  async removeTeamMember(id: string) {
-    return this.request(`/project-teams/${id}`, { method: 'DELETE' });
+  async deleteProjectTeam(id: string) {
+    return this.request(`/api/project-teams/${id}`, { method: 'DELETE' });
+  }
+  async getUserProjects(userId: string) {
+    return this.request(`/api/project-teams/user-projects/${userId}`);
+  }
+  async getAvailableUsers() {
+    return this.request('/api/project-teams/available-users');
   }
 
   // Users & Audit
@@ -177,63 +182,71 @@ class ApiClient {
   }
   async getAuditLogs(limit?: number) {
     return this.request(limit
-      ? `/admin/activity-log?limit=${limit}`
-      : '/admin/activity-log');
+      ? `/api/admin/activity-log?limit=${limit}`
+      : '/api/admin/activity-log');
   }
 
   // Expenses
   async getExpenses(params: Record<string, any> = {}) {
-    const qs = Object.keys(params).length > 0 ? `?${new URLSearchParams(params).toString()}` : '';
-    return this.request(`/expenses${qs}`);
-  }
-  async getProjectExpenses(projectId: string, params: Record<string, any> = {}) {
     const qs = new URLSearchParams(params).toString();
-    return this.request(`/expenses/project/${projectId}${qs ? `?${qs}` : ''}`);
+    return this.request(`/api/expenses${qs ? `?${qs}` : ''}`);
+  }
+
+  async getExpensesByProject(projectId: string) {
+    return this.request(`/api/expenses?project_id=${projectId}`);
+  }
+  async getExpense(id: string) {
+    return this.request(`/api/expenses/${id}`);
   }
   async createExpense(expense: any) {
-    return this.request('/expenses', {
+    return this.request('/api/expenses', {
       method: 'POST',
       body: JSON.stringify(expense),
     });
   }
+  async updateExpense(id: string, updates: any) {
+    return this.request(`/api/expenses/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(updates),
+    });
+  }
+  async deleteExpense(id: string) {
+    return this.request(`/api/expenses/${id}`, { method: 'DELETE' });
+  }
 
   // Budget Categories
   async getBudgetCategories(projectId?: string) {
-    return this.request(projectId
-      ? `/budget-categories?project_id=${projectId}`
-      : '/budget-categories');
+    const url = projectId ? `/api/budget-categories?project_id=${projectId}` : '/api/budget-categories';
+    return this.request(url);
   }
   async createBudgetCategory(category: any) {
-    return this.request('/budget-categories', {
+    return this.request('/api/budget-categories', {
       method: 'POST',
       body: JSON.stringify(category),
     });
   }
   async updateBudgetCategory(id: string, updates: any) {
-    return this.request(`/budget-categories/${id}`, {
+    return this.request(`/api/budget-categories/${id}`, {
       method: 'PUT',
       body: JSON.stringify(updates),
     });
   }
   async deleteBudgetCategory(id: string) {
-    return this.request(`/budget-categories/${id}`, { method: 'DELETE' });
+    return this.request(`/api/budget-categories/${id}`, { method: 'DELETE' });
   }
 
   // Notifications
   async getNotifications(userId: string) {
-    return this.request(`/notifications?user_id=${userId}`);
+    return this.request(`/api/notifications?user_id=${userId}`);
   }
   async markNotificationAsRead(id: string) {
-    return this.request(`/notifications/${id}`, {
-      method: 'PUT',
-      body: JSON.stringify({ read: true }),
-    });
+    return this.request(`/api/notifications/${id}/read`, { method: 'PUT' });
   }
   async deleteNotification(id: string) {
-    return this.request(`/notifications/${id}`, { method: 'DELETE' });
+    return this.request(`/api/notifications/${id}`, { method: 'DELETE' });
   }
   async markAllNotificationsAsRead(ids: string[]) {
-    return this.request('/notifications/mark-all-read', {
+    return this.request('/api/notifications/mark-all-read', {
       method: 'PUT',
       body: JSON.stringify({ notification_ids: ids }),
     });
@@ -269,7 +282,21 @@ class ApiClient {
 
   // Admin
   async getAdminExpenses() {
-    return this.request('/admin/expenses');
+    return this.request('/api/admin/expenses');
+  }
+
+  // Analytics
+  async getAnalyticsDashboard() {
+    return this.request('/api/analytics/dashboard');
+  }
+  async getAnalyticsRisks() {
+    return this.request('/api/analytics/risks');
+  }
+  async getAnalyticsInsights() {
+    return this.request('/api/analytics/insights');
+  }
+  async getAnalyticsPerformance() {
+    return this.request('/api/analytics/performance');
   }
 
   // Generic helpers
@@ -291,6 +318,39 @@ class ApiClient {
   }
   async delete(endpoint: string) {
     return this.request(endpoint, { method: 'DELETE' });
+  }
+
+  // Project admin expense approval
+  async approveExpenseAsProjectAdmin(expenseId: string, status: 'approved' | 'rejected', comments?: string) {
+    return this.request(`/api/project-teams/expenses/${expenseId}/approve`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, comments })
+    });
+  }
+
+  // Project Admin Management
+  async getProjectAdmins(projectId: string) {
+    return this.request(`/api/project-admin/${projectId}/admins`);
+  }
+  async assignProjectAdmin(projectId: string, userId: string) {
+    return this.request(`/api/project-admin/${projectId}/admins`, {
+      method: 'POST',
+      body: JSON.stringify({ userId })
+    });
+  }
+  async removeProjectAdmin(projectId: string, userId: string) {
+    return this.request(`/api/project-admin/${projectId}/admins/${userId}`, {
+      method: 'DELETE'
+    });
+  }
+  async getUserProjectPermissions(projectId: string) {
+    return this.request(`/api/project-admin/permissions/${projectId}`);
+  }
+  async getUserAdminProjects() {
+    return this.request('/api/project-admin/my-admin-projects');
+  }
+  async getProjectPermissionsList() {
+    return this.request('/api/project-admin/permissions-list');
   }
 }
 

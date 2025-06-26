@@ -16,6 +16,7 @@ import {
   Clock, Target, BarChart3, ArrowUpRight, ArrowDownRight, Zap
 } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
+import { useProjectRefresh } from '@/contexts/ProjectContext';
 
 interface Project {
   id: string;
@@ -27,8 +28,10 @@ interface Project {
   total_budget: number;
   allocated_budget: number;
   spent_budget: number;
-  department: string;
+  business_unit_name: string;
+  business_unit_id: string;
   currency: string; // Add currency field
+  project_manager_id: string;
 }
 
 type ViewMode = 'grid' | 'list';
@@ -44,7 +47,7 @@ const BudgetPlanning = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('grid');
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [departmentFilter, setDepartmentFilter] = useState('all');
+  const [businessUnitFilter, setBusinessUnitFilter] = useState('all');
   const [sortBy, setSortBy] = useState<SortOption>('name');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   
@@ -54,30 +57,35 @@ const BudgetPlanning = () => {
     start_date: '',
     end_date: '',
     total_budget: '',
-    department: '',
+    business_unit_id: '',
     currency: 'USD' // Add currency with default value
   });
+  const [availableUsers, setAvailableUsers] = useState<any[]>([]);
+  const [selectedTeamMembers, setSelectedTeamMembers] = useState<string[]>([]);
+  const [selectedProjectAdmin, setSelectedProjectAdmin] = useState<string>('');
   const [editProject, setEditProject] = useState({
     name: '',
     description: '',
     start_date: '',
     end_date: '',
     total_budget: '',
-    department: '',
+    business_unit_id: '',
     currency: 'USD' // Add currency field
   });
   const { toast } = useToast();
   const { user } = useAuth();
+  const { triggerRefresh } = useProjectRefresh();
 
   useEffect(() => {
     fetchProjects();
     fetchBusinessUnits();
+    fetchAvailableUsers();
   }, []);
 
   const fetchBusinessUnits = async () => {
     try {
       const data = await apiClient.getBusinessUnits();
-      setBusinessUnits(Array.isArray(data) ? data : []);
+      setBusinessUnits(data.business_units || []);
     } catch (error) {
       console.error('Error fetching business units:', error);
       // Fallback to hardcoded values if API fails
@@ -90,9 +98,21 @@ const BudgetPlanning = () => {
     }
   };
 
+  const fetchAvailableUsers = async () => {
+    try {
+      console.log('🔍 Fetching available users...');
+      const data = await apiClient.getAvailableUsers();
+      console.log('📋 Available users response:', data);
+      setAvailableUsers(data.users || []);
+    } catch (error) {
+      console.error('❌ Error fetching available users:', error);
+      setAvailableUsers([]);
+    }
+  };
+
   useEffect(() => {
     filterAndSortProjects();
-  }, [projects, searchTerm, statusFilter, departmentFilter, sortBy, sortOrder]);
+  }, [projects, searchTerm, statusFilter, businessUnitFilter, sortBy, sortOrder]);
 
   const fetchProjects = async () => {
     try {
@@ -134,11 +154,11 @@ const BudgetPlanning = () => {
     let filtered = projects.filter(project => {
       const matchesSearch = project.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
                            project.description.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                           project.department.toLowerCase().includes(searchTerm.toLowerCase());
+                           (project.business_unit_name || '').toLowerCase().includes(searchTerm.toLowerCase());
       const matchesStatus = statusFilter === 'all' || project.status === statusFilter;
-      const matchesDepartment = departmentFilter === 'all' || project.department === departmentFilter;
+      const matchesBusinessUnit = businessUnitFilter === 'all' || project.business_unit_id?.toString() === businessUnitFilter;
       
-      return matchesSearch && matchesStatus && matchesDepartment;
+      return matchesSearch && matchesStatus && matchesBusinessUnit;
     });
 
     // Sort projects
@@ -182,6 +202,16 @@ const BudgetPlanning = () => {
   const createProject = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Validate that a project admin is selected
+    if (!selectedProjectAdmin || selectedProjectAdmin.trim() === '') {
+      toast({
+        title: "Validation Error",
+        description: "Please select a Project Admin. This field is required.",
+        variant: "destructive"
+      });
+      return;
+    }
+    
     try {
       const projectData = {
         name: newProject.name,
@@ -189,9 +219,8 @@ const BudgetPlanning = () => {
         total_budget: parseFloat(newProject.total_budget), // Backend expects total_budget, not budget
         start_date: newProject.start_date, // Backend expects start_date, not startDate
         end_date: newProject.end_date, // Backend expects end_date, not endDate
-        department: newProject.department,
-        currency: newProject.currency || 'USD', // Add currency support
-        business_unit_id: null // Add if you have business units
+        business_unit_id: newProject.business_unit_id,
+        currency: newProject.currency || 'USD' // Add currency support
       };
   
       const response = await apiClient.createProject(projectData);
@@ -200,6 +229,37 @@ const BudgetPlanning = () => {
         throw new Error(typeof response.error === 'object' && response.error && 'message' in response.error ? response.error.message as string : 'Failed to create project');
       }
   
+      // Assign the selected project admin (only if different from creator)
+      if (response.project?.id && selectedProjectAdmin !== user?.id) {
+        try {
+          await apiClient.createProjectTeam({
+            project_id: response.project.id,
+            user_id: selectedProjectAdmin,
+            role: 'admin'
+          });
+        } catch (adminError) {
+          console.error('Error adding project admin:', adminError);
+        }
+      }
+      
+      // Create project team entries for selected members (excluding the admin if already in the list)
+      if (selectedTeamMembers.length > 0 && response.project?.id) {
+        for (const userId of selectedTeamMembers) {
+          // Skip if this user is already assigned as admin
+          if (userId === selectedProjectAdmin) continue;
+          
+          try {
+            await apiClient.createProjectTeam({
+              project_id: response.project.id,
+              user_id: userId,
+              role: 'member'
+            });
+          } catch (teamError) {
+            console.error('Error adding team member:', teamError);
+          }
+        }
+      }
+
       toast({
         title: "Success",
         description: "Project created successfully"
@@ -211,10 +271,13 @@ const BudgetPlanning = () => {
         start_date: '',
         end_date: '',
         total_budget: '',
-        department: '',
+        business_unit_id: '',
         currency: 'USD'
       });
+      setSelectedTeamMembers([]);
+      setSelectedProjectAdmin('');
       fetchProjects();
+      triggerRefresh(); // Trigger global refresh for all components
     } catch (error) {
       console.error('Create project error:', error);
       toast({
@@ -273,7 +336,7 @@ const BudgetPlanning = () => {
         total_budget: parseFloat(editProject.total_budget),
         start_date: editProject.start_date,
         end_date: editProject.end_date,
-        department: editProject.department,
+        business_unit_id: editProject.business_unit_id,
         currency: editProject.currency
       });
   
@@ -333,7 +396,7 @@ const BudgetPlanning = () => {
         start_date: project.start_date,
         end_date: project.end_date,
         total_budget: project.total_budget.toString(),
-        department: project.department,
+        business_unit_id: project.business_unit_id,
         currency: project.currency || 'USD'
       });
   };
@@ -346,7 +409,7 @@ const BudgetPlanning = () => {
       start_date: '',
       end_date: '',
       total_budget: '',
-      department: '',
+      business_unit_id: '',
       currency: 'USD' // Reset currency
     });
   };
@@ -368,12 +431,12 @@ const BudgetPlanning = () => {
     }
   };
 
-  const getDepartments = () => {
-    return businessUnits.map(unit => unit.name);
-  };
-
   const getBusinessUnits = () => {
     return businessUnits;
+  };
+
+  const getBusinessUnitNames = () => {
+    return businessUnits.map(unit => unit.name);
   };
 
   const getProjectStats = (project: Project) => {
@@ -393,6 +456,25 @@ const BudgetPlanning = () => {
   // Project Detail Modal Component
   const ProjectDetailModal = ({ project }: { project: Project }) => {
     const stats = getProjectStats(project);
+    const [projectTeam, setProjectTeam] = useState<any[]>([]);
+    const [loadingTeam, setLoadingTeam] = useState(false);
+    
+    useEffect(() => {
+      const fetchProjectTeam = async () => {
+      try {
+        setLoadingTeam(true);
+        const response = await apiClient.getProjectTeams(project.id);
+        setProjectTeam(response.project_teams || []);
+      } catch (error) {
+        console.error('Failed to fetch project team:', error);
+        setProjectTeam([]);
+      } finally {
+        setLoadingTeam(false);
+      }
+    };
+      
+      fetchProjectTeam();
+    }, [project.id]);
     
     return (
       <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
@@ -459,7 +541,7 @@ const BudgetPlanning = () => {
           </Card>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
           <div>
             <h3 className="text-lg font-semibold mb-3">Project Details</h3>
             <div className="space-y-3">
@@ -469,9 +551,107 @@ const BudgetPlanning = () => {
               </div>
               <div className="flex items-center gap-2">
                 <Users className="h-4 w-4 text-gray-500" />
-                <span className="text-sm">Department: {project.department}</span>
+                <span className="text-sm">Business Unit: {project.business_unit_name}</span>
               </div>
             </div>
+          </div>
+          
+          <div>
+            <h3 className="text-lg font-semibold mb-3">Project Team</h3>
+            {loadingTeam ? (
+              <div className="flex items-center gap-2 text-sm text-gray-500">
+                <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-gray-900"></div>
+                Loading team...
+              </div>
+            ) : projectTeam.length > 0 ? (
+              <div className="space-y-3">
+                {/* Project Creator Section */}
+                {(() => {
+                  const projectCreator = projectTeam.find(member => member.user_id === project.project_manager_id);
+                  return projectCreator && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-orange-600 mb-2">Project Creator</h4>
+                      <div className="space-y-2">
+                        <div className="flex items-center gap-2 p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                          <div className="w-8 h-8 bg-orange-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                            {(projectCreator.full_name || projectCreator.email).charAt(0).toUpperCase()}
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-sm font-medium">{projectCreator.full_name || projectCreator.email}</p>
+                            <p className="text-xs text-gray-500">{projectCreator.email}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="default" className="text-xs bg-orange-600 text-white">
+                              Project Admin
+                            </Badge>
+                            <Button size="sm" variant="outline" className="text-xs h-6 px-2">
+                              Expense Approval
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+                
+                {/* Other Project Admins Section */}
+                {(() => {
+                  const otherAdmins = projectTeam.filter(member => 
+                    (member.role === 'admin' || member.role === 'manager') && 
+                    member.user_id !== project.project_manager_id
+                  );
+                  return otherAdmins.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-blue-600 mb-2">Project Admin{otherAdmins.length > 1 ? 's' : ''}</h4>
+                      <div className="space-y-2">
+                        {otherAdmins.map((admin) => (
+                          <div key={admin.id} className="flex items-center gap-2 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                              {(admin.full_name || admin.email).charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{admin.full_name || admin.email}</p>
+                              <p className="text-xs text-gray-500">{admin.email}</p>
+                            </div>
+                            <Badge variant="default" className="text-xs bg-blue-600">
+                              Project Admin
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+                
+                {/* Team Members Section */}
+                {(() => {
+                  const members = projectTeam.filter(member => member.role !== 'admin' && member.role !== 'manager');
+                  return members.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold text-gray-600 mb-2">Team Members ({members.length})</h4>
+                      <div className="space-y-2">
+                        {members.map((member) => (
+                          <div key={member.id} className="flex items-center gap-2 p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                            <div className="w-8 h-8 bg-gray-500 rounded-full flex items-center justify-center text-white text-sm font-medium">
+                              {(member.full_name || member.email).charAt(0).toUpperCase()}
+                            </div>
+                            <div className="flex-1">
+                              <p className="text-sm font-medium">{member.full_name || member.email}</p>
+                              <p className="text-xs text-gray-500">{member.email}</p>
+                            </div>
+                            <Badge variant="outline" className="text-xs">
+                              {member.role}
+                            </Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            ) : (
+              <p className="text-sm text-gray-500">No team members assigned</p>
+            )}
           </div>
           
           <div>
@@ -642,12 +822,22 @@ const BudgetPlanning = () => {
                     />
                   </div>
                   <div>
-                    <Label htmlFor={`dept-${project.id}`} className="text-xs">Department</Label>
-                    <Input
-                      id={`dept-${project.id}`}
-                      value={editProject.department}
-                      onChange={(e) => setEditProject(prev => ({ ...prev, department: e.target.value }))}
-                    />
+                    <Label htmlFor={`bu-${project.id}`} className="text-xs">Business Unit</Label>
+                    <Select
+                      value={editProject.business_unit_id}
+                      onValueChange={(value) => setEditProject(prev => ({ ...prev, business_unit_id: value }))}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select business unit" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getBusinessUnits().map((unit) => (
+                          <SelectItem key={unit.id} value={unit.id}>
+                            {unit.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
               ) : (
@@ -698,7 +888,7 @@ const BudgetPlanning = () => {
                     
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Users className="h-4 w-4 text-purple-500" />
-                      <span className="font-medium">{project.department}</span>
+                      <span className="font-medium">{project.business_unit_name}</span>
                     </div>
                     
                     <div className="flex items-center gap-2 text-sm text-gray-600">
@@ -808,8 +998,8 @@ const BudgetPlanning = () => {
                         <Users className="h-5 w-5 text-purple-600" />
                       </div>
                       <div>
-                        <p className="text-xs text-gray-500 uppercase tracking-wide">Department</p>
-                        <p className="text-sm font-semibold text-gray-900">{project.department}</p>
+                        <p className="text-xs text-gray-500 uppercase tracking-wide">Business Unit</p>
+                        <p className="text-sm font-semibold text-gray-900">{project.business_unit_name}</p>
                       </div>
                     </div>
                     
@@ -963,14 +1153,14 @@ const BudgetPlanning = () => {
             
             {/* Business Unit Filter */}
             <div>
-              <Select value={departmentFilter} onValueChange={setDepartmentFilter}>
+              <Select value={businessUnitFilter} onValueChange={setBusinessUnitFilter}>
                 <SelectTrigger className="border-gray-200 focus:border-orange-500">
                   <SelectValue placeholder="Business Unit" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All Business Units</SelectItem>
                   {businessUnits.map(unit => (
-                    <SelectItem key={unit.id} value={unit.name}>{unit.name}</SelectItem>
+                    <SelectItem key={unit.id} value={unit.id.toString()}>{unit.name}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
@@ -1056,17 +1246,22 @@ const BudgetPlanning = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="department">Business Unit</Label>
+                  <Label htmlFor="business_unit_id">Business Unit</Label>
                   <Select 
-                    value={newProject.department} 
-                    onValueChange={(value) => setNewProject(prev => ({ ...prev, department: value }))}
+                    value={newProject.business_unit_id?.toString() || ''} 
+                    onValueChange={(value) => setNewProject(prev => ({ ...prev, business_unit_id: value }))}
                   >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select business unit" />
+                      <SelectValue placeholder="Select business unit">
+                        {newProject.business_unit_id ? 
+                          businessUnits.find(unit => unit.id.toString() === newProject.business_unit_id?.toString())?.name || 'Select business unit'
+                          : 'Select business unit'
+                        }
+                      </SelectValue>
                     </SelectTrigger>
                     <SelectContent>
                       {businessUnits.map(unit => (
-                        <SelectItem key={unit.id} value={unit.name}>{unit.name}</SelectItem>
+                        <SelectItem key={unit.id} value={unit.id.toString()}>{unit.name}</SelectItem>
                       ))}
                     </SelectContent>
                   </Select>
@@ -1129,6 +1324,103 @@ const BudgetPlanning = () => {
                   </Select>
                 </div>
               </div>
+              <div className="space-y-2">
+                <Label>Project Team Members</Label>
+                <Select onValueChange={(value) => {
+                  if (!selectedTeamMembers.includes(value)) {
+                    setSelectedTeamMembers(prev => [...prev, value]);
+                  }
+                }}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select team members" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableUsers.length === 0 ? (
+                      <div className="p-2 text-sm text-gray-500">No users available</div>
+                    ) : (
+                      availableUsers
+                        .filter(user => !selectedTeamMembers.includes(user.id))
+                        .map(user => (
+                          <SelectItem key={user.id} value={user.id}>
+                            {user.full_name || user.email}
+                          </SelectItem>
+                        ))
+                    )}
+                  </SelectContent>
+                </Select>
+                {selectedTeamMembers.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-600 mb-2">
+                      {selectedTeamMembers.length} member{selectedTeamMembers.length !== 1 ? 's' : ''} selected:
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {selectedTeamMembers.map(memberId => {
+                        const user = availableUsers.find(u => u.id === memberId);
+                        return (
+                          <div key={memberId} className="flex items-center gap-1 bg-blue-100 text-blue-800 px-2 py-1 rounded-md text-sm">
+                            <span>{user?.full_name || user?.email || 'Unknown User'}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedTeamMembers(prev => prev.filter(id => id !== memberId));
+                                // Clear admin selection if the admin is being removed
+                                if (selectedProjectAdmin === memberId) {
+                                  setSelectedProjectAdmin('');
+                                }
+                              }}
+                              className="ml-1 text-blue-600 hover:text-blue-800"
+                            >
+                              ×
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+              </div>
+              
+              {/* Project Admin Selection */}
+              <div className="space-y-2">
+                <Label>Project Admin <span className="text-red-500">*</span></Label>
+                <Select 
+                  value={selectedProjectAdmin} 
+                  onValueChange={(value) => setSelectedProjectAdmin(value)}
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a user as project admin" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableUsers.map(user => (
+                      <SelectItem key={user.id} value={user.id}>
+                        <div className="flex items-center gap-2">
+                          <span>{user.full_name || user.email}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {user.role}
+                          </Badge>
+                        </div>
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {selectedProjectAdmin && selectedProjectAdmin !== 'none' && (
+                  <div className="mt-2">
+                    <div className="flex items-center gap-2 bg-blue-100 text-blue-800 px-3 py-2 rounded-md text-sm">
+                      <span className="font-medium">Project Admin:</span>
+                      <span>
+                        {availableUsers.find(u => u.id === selectedProjectAdmin)?.full_name || 
+                         availableUsers.find(u => u.id === selectedProjectAdmin)?.email || 
+                         'Unknown User'}
+                      </span>
+                      <Badge variant="outline" className="text-xs">
+                        Will have admin access to this project
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+              </div>
+              
               <div className="space-y-2">
                 <Label htmlFor="description">Description</Label>
                 <Textarea

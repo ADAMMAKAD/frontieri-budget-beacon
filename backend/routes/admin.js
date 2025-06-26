@@ -146,7 +146,12 @@ router.put('/users/:id', authenticateToken, requireRole(['admin']), [
   body('role').optional().isIn(['admin', 'manager', 'user', 'viewer']),
   body('is_active').optional().isBoolean(),
   body('department').optional().trim(),
-  body('team_id').optional().isUUID()
+  body('team_id').optional().custom((value) => {
+    if (value === null || value === undefined || value === '') {
+      return true;
+    }
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  })
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -233,10 +238,16 @@ router.put('/users/:id', authenticateToken, requireRole(['admin']), [
 // Create new user
 router.post('/users', authenticateToken, requireRole(['admin']), [
   body('email').isEmail().normalizeEmail(),
+  body('password').optional().isLength({ min: 6 }),
   body('full_name').trim().isLength({ min: 1 }),
   body('role').isIn(['admin', 'manager', 'user', 'viewer']),
   body('status').optional().isIn(['active', 'inactive']),
-  body('team_id').optional().isUUID()
+  body('team_id').optional().custom((value) => {
+    if (value === null || value === undefined || value === '') {
+      return true;
+    }
+    return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
+  })
 ], async (req, res) => {
   try {
     const errors = validationResult(req);
@@ -244,7 +255,7 @@ router.post('/users', authenticateToken, requireRole(['admin']), [
       return res.status(400).json({ errors: errors.array() });
     }
     
-    const { email, full_name, role, status = 'active', team_id } = req.body;
+    const { email, password, full_name, role, status = 'active', team_id } = req.body;
     
     const client = await pool.connect();
     
@@ -257,10 +268,10 @@ router.post('/users', authenticateToken, requireRole(['admin']), [
         throw new Error('User with this email already exists');
       }
       
-      // Create user with default password (they'll need to reset it)
-      const defaultPassword = 'TempPassword123!';
+      // Use provided password or default password
+      const userPassword = password || 'TempPassword123!';
       const bcrypt = require('bcrypt');
-      const hashedPassword = await bcrypt.hash(defaultPassword, 10);
+      const hashedPassword = await bcrypt.hash(userPassword, 10);
       
       const result = await client.query(
         `INSERT INTO users (email, password_hash, full_name, role, is_active, created_at, updated_at) 
@@ -460,6 +471,26 @@ router.put('/expenses/:id/approve', authenticateToken, requireRole(['admin', 'ma
       return res.status(400).json({ error: 'Invalid status' });
     }
     
+    // Get expense details to check project ownership
+    const expenseQuery = 'SELECT * FROM expenses WHERE id = $1';
+    const expenseResult = await pool.query(expenseQuery, [id]);
+    
+    if (expenseResult.rows.length === 0) {
+      return res.status(404).json({ error: 'Expense not found' });
+    }
+    
+    const expense = expenseResult.rows[0];
+    
+    // Check if user is project creator (only project creators can approve, except admins)
+    if (req.user.role !== 'admin') {
+      const { isProjectCreator } = require('../utils/permissionHelper');
+      const isCreator = await isProjectCreator(req.user.id, expense.project_id);
+      
+      if (!isCreator) {
+        return res.status(403).json({ error: 'Only the project creator can approve expenses for this project' });
+      }
+    }
+    
     const result = await pool.query(
       'UPDATE expenses SET status = $1, approved_by = $2 WHERE id = $3 RETURNING *',
       [status, req.user.id, id]
@@ -470,7 +501,8 @@ router.put('/expenses/:id/approve', authenticateToken, requireRole(['admin', 'ma
     }
     
     // Create notification for submitter
-    const expense = result.rows[0];
+    // Use the updated expense data from the result
+    expense = result.rows[0];
     await pool.query(
       'INSERT INTO notifications (user_id, title, message, type) VALUES ($1, $2, $3, $4)',
       [

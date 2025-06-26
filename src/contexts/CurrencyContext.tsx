@@ -45,10 +45,21 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     // Otherwise, convert from USD to the current currency
     const displayAmount = targetCurrency ? amount : convertCurrency(amount, 'USD', currencyToUse);
     
+    // Ensure the amount is a valid number
+    const validAmount = isNaN(displayAmount) ? 0 : displayAmount;
+    
     if (currencyToUse === 'USD') {
-      return `${config.symbol}${displayAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(validAmount);
     } else {
-      return `${displayAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${config.symbol}`;
+      return `${new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(validAmount)} ${config.symbol}`;
     }
   };
 

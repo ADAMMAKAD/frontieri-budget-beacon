@@ -9,9 +9,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, TrendingUp, Calendar, DollarSign, CheckCircle, Clock, Search, Filter, X, SortAsc, SortDesc, BarChart3, PieChart, Target, AlertTriangle, Zap, Eye, Download, RefreshCw, Activity } from 'lucide-react';
+import { Plus, TrendingUp, Calendar, DollarSign, CheckCircle, Clock, Search, Filter, X, SortAsc, SortDesc, BarChart3, PieChart, Target, AlertTriangle, Zap, Eye, Download, RefreshCw, Activity, Grid3X3, List } from 'lucide-react';
 import { useAuth } from '@/hooks/useAuth';
 import { useCurrency } from '@/contexts/CurrencyContext';
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 
 interface Project {
   id: string;
@@ -22,7 +23,7 @@ interface BudgetCategory {
   id: string;
   name: string;
   allocated_amount: number;
-  spent_amount: number;
+  total_spent: number;
 }
 
 interface Expense {
@@ -43,6 +44,9 @@ const BudgetTracking = () => {
   const [selectedProject, setSelectedProject] = useState<string>('');
   const [isCreating, setIsCreating] = useState(false);
   const [showFilters, setShowFilters] = useState(false);
+  const [viewMode, setViewMode] = useState<'list' | 'grid'>('list');
+  const [selectedExpense, setSelectedExpense] = useState<Expense | null>(null);
+  const [isExpenseModalOpen, setIsExpenseModalOpen] = useState(false);
   const { formatCurrency } = useCurrency();
   
   // Search and filter states
@@ -251,9 +255,9 @@ const BudgetTracking = () => {
       // Update category spent amount
       const category = categories.find(c => c.id === newExpense.category_id);
       if (category) {
-        const newSpentAmount = category.spent_amount + parseFloat(newExpense.amount);
+        const newSpentAmount = category.total_spent + parseFloat(newExpense.amount);
         await apiClient.updateBudgetCategory(newExpense.category_id, {
-          spent_amount: newSpentAmount
+          total_spent: newSpentAmount
         });
         fetchCategories(selectedProject);
       }
@@ -283,7 +287,7 @@ const BudgetTracking = () => {
     }
   };
 
-  const totalSpent = categories.reduce((sum, cat) => sum + (parseFloat(cat.spent_amount) || 0), 0);
+  const totalSpent = categories.reduce((sum, cat) => sum + (parseFloat(cat.total_spent) || 0), 0);
   const totalAllocated = categories.reduce((sum, cat) => sum + (parseFloat(cat.allocated_amount) || 0), 0);
 
   // Filter projects to ensure no empty IDs
@@ -291,6 +295,131 @@ const BudgetTracking = () => {
 
   const hasActiveFilters = searchTerm || statusFilter !== 'all' || categoryFilter !== 'all' || 
     dateFromFilter || dateToFilter || amountFromFilter || amountToFilter;
+
+  // Handle expense selection for modal
+  const handleExpenseClick = (expense: Expense) => {
+    setSelectedExpense(expense);
+    setIsExpenseModalOpen(true);
+  };
+
+  // Grid View Component
+  const GridView = () => (
+    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      {filteredExpenses.map((expense, index) => (
+        <Card 
+          key={expense.id} 
+          className="group hover:shadow-xl transition-all duration-300 hover:-translate-y-1 border-0 shadow-md bg-gradient-to-br from-white to-gray-50/50 overflow-hidden cursor-pointer"
+          style={{ animationDelay: `${index * 100}ms` }}
+          onClick={() => handleExpenseClick(expense)}
+        >
+          {/* Status indicator bar */}
+          <div className={`h-1 w-full ${
+            expense.status === 'approved' ? 'bg-gradient-to-r from-green-400 to-green-600' :
+            expense.status === 'pending' ? 'bg-gradient-to-r from-yellow-400 to-yellow-600' :
+            'bg-gradient-to-r from-red-400 to-red-600'
+          }`} />
+          
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between">
+              <div className="flex-1">
+                <CardTitle className="text-lg font-bold text-gray-900 group-hover:text-orange-600 transition-colors line-clamp-2">
+                  {expense.description}
+                </CardTitle>
+                <CardDescription className="mt-2 text-sm text-gray-600">
+                  {expense.budget_categories?.name}
+                </CardDescription>
+              </div>
+              <Badge className={`${getStatusColor(expense.status)} text-xs font-medium px-2 py-1 rounded-full`}>
+                {expense.status}
+              </Badge>
+            </div>
+          </CardHeader>
+          
+          <CardContent className="pt-0">
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <span className="text-2xl font-bold text-gray-900 group-hover:text-orange-700">
+                  {formatCurrency(expense.amount)}
+                </span>
+                <div className="p-2 bg-gray-100 rounded-lg group-hover:bg-orange-100 transition-colors">
+                  <DollarSign className="h-4 w-4 text-gray-600 group-hover:text-orange-600" />
+                </div>
+              </div>
+              
+              <div className="flex items-center space-x-2 text-sm text-gray-600">
+                <Calendar className="h-3 w-3" />
+                <span>{new Date(expense.expense_date).toLocaleDateString()}</span>
+              </div>
+              
+              <div className="flex items-center gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Button size="sm" variant="ghost" className="flex-1">
+                  <Eye className="h-3 w-3 mr-1" />
+                  View
+                </Button>
+                <Button size="sm" variant="ghost">
+                  <Download className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+
+  // List View Component
+  const ListView = () => (
+    <div className="space-y-4">
+      {filteredExpenses.map((expense, index) => (
+        <div 
+          key={expense.id} 
+          className="group flex items-center justify-between p-6 border border-gray-200 rounded-xl hover:shadow-lg hover:border-orange-200 transition-all duration-300 bg-white hover:bg-gradient-to-r hover:from-orange-50/50 hover:to-transparent cursor-pointer"
+          style={{ animationDelay: `${index * 50}ms` }}
+          onClick={() => handleExpenseClick(expense)}
+        >
+          <div className="flex-1">
+            <div className="flex items-center space-x-3 mb-2">
+              <div className="p-2 bg-gray-100 rounded-lg group-hover:bg-orange-100 transition-colors">
+                <DollarSign className="h-4 w-4 text-gray-600 group-hover:text-orange-600" />
+              </div>
+              <div className="flex-1">
+                <div className="flex items-center space-x-2 mb-1">
+                  <h4 className="font-semibold text-gray-900 group-hover:text-orange-900">{expense.description}</h4>
+                  <Badge className={`${getStatusColor(expense.status)} transition-all duration-200`}>
+                    <div className="flex items-center space-x-1">
+                      {getStatusIcon(expense.status)}
+                      <span className="capitalize">{expense.status}</span>
+                    </div>
+                  </Badge>
+                </div>
+                <div className="flex items-center space-x-4 text-sm text-gray-600">
+                  <div className="flex items-center space-x-1">
+                    <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+                    <span>{expense.budget_categories?.name}</span>
+                  </div>
+                  <div className="flex items-center space-x-1">
+                    <Calendar className="h-3 w-3" />
+                    <span>{new Date(expense.expense_date).toLocaleDateString()}</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div className="text-right space-y-1">
+            <p className="font-bold text-xl text-gray-900 group-hover:text-orange-700">{formatCurrency(expense.amount)}</p>
+            <div className="flex items-center gap-2">
+              <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <Eye className="h-3 w-3" />
+              </Button>
+              <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity">
+                <Download className="h-3 w-3" />
+              </Button>
+            </div>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-orange-50/30 p-6 space-y-8">
@@ -734,6 +863,25 @@ const BudgetTracking = () => {
                 </div>
               </div>
               <div className="flex items-center gap-2">
+                {/* View Mode Toggle */}
+                <div className="flex items-center gap-1 mr-2">
+                  <Button
+                    variant={viewMode === 'list' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setViewMode('list')}
+                    className={viewMode === 'list' ? 'bg-orange-600 hover:bg-orange-700' : 'border-orange-200 text-orange-600 hover:bg-orange-50'}
+                  >
+                    <List className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    variant={viewMode === 'grid' ? 'default' : 'outline'}
+                    size="sm"
+                    onClick={() => setViewMode('grid')}
+                    className={viewMode === 'grid' ? 'bg-orange-600 hover:bg-orange-700' : 'border-orange-200 text-orange-600 hover:bg-orange-50'}
+                  >
+                    <Grid3X3 className="h-4 w-4" />
+                  </Button>
+                </div>
                 {!showFilters && hasActiveFilters && (
                   <Button variant="outline" size="sm" onClick={() => setShowFilters(true)} className="border-orange-200 text-orange-600 hover:bg-orange-50">
                     <Filter className="mr-1 h-3 w-3" />
@@ -752,55 +900,7 @@ const BudgetTracking = () => {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {filteredExpenses.map((expense, index) => (
-                <div 
-                  key={expense.id} 
-                  className="group flex items-center justify-between p-6 border border-gray-200 rounded-xl hover:shadow-lg hover:border-orange-200 transition-all duration-300 bg-white hover:bg-gradient-to-r hover:from-orange-50/50 hover:to-transparent"
-                  style={{ animationDelay: `${index * 50}ms` }}
-                >
-                  <div className="flex-1">
-                    <div className="flex items-center space-x-3 mb-2">
-                      <div className="p-2 bg-gray-100 rounded-lg group-hover:bg-orange-100 transition-colors">
-                        <DollarSign className="h-4 w-4 text-gray-600 group-hover:text-orange-600" />
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center space-x-2 mb-1">
-                          <h4 className="font-semibold text-gray-900 group-hover:text-orange-900">{expense.description}</h4>
-                          <Badge className={`${getStatusColor(expense.status)} transition-all duration-200`}>
-                            <div className="flex items-center space-x-1">
-                              {getStatusIcon(expense.status)}
-                              <span className="capitalize">{expense.status}</span>
-                            </div>
-                          </Badge>
-                        </div>
-                        <div className="flex items-center space-x-4 text-sm text-gray-600">
-                          <div className="flex items-center space-x-1">
-                            <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
-                            <span>{expense.budget_categories?.name}</span>
-                          </div>
-                          <div className="flex items-center space-x-1">
-                            <Calendar className="h-3 w-3" />
-                            <span>{new Date(expense.expense_date).toLocaleDateString()}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="text-right space-y-1">
-                    <p className="font-bold text-xl text-gray-900 group-hover:text-orange-700">{formatCurrency(expense.amount)}</p>
-                    <div className="flex items-center gap-2">
-                      <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Eye className="h-3 w-3" />
-                      </Button>
-                      <Button size="sm" variant="ghost" className="opacity-0 group-hover:opacity-100 transition-opacity">
-                        <Download className="h-3 w-3" />
-                      </Button>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {viewMode === 'grid' ? <GridView /> : <ListView />}
           </CardContent>
         </Card>
       )}
@@ -835,6 +935,126 @@ const BudgetTracking = () => {
           </Button>
         </div>
       )}
+
+      {/* Expense Detail Modal */}
+      <Dialog open={isExpenseModalOpen} onOpenChange={setIsExpenseModalOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-xl font-bold text-gray-900">
+              Expense Details
+            </DialogTitle>
+            <DialogDescription className="text-gray-600">
+              Complete information about this expense record
+            </DialogDescription>
+          </DialogHeader>
+          
+          {selectedExpense && (
+            <div className="space-y-6">
+              {/* Header Section */}
+              <div className="flex items-start justify-between p-4 bg-gradient-to-r from-orange-50 to-red-50 rounded-lg">
+                <div className="flex-1">
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">
+                    {selectedExpense.description}
+                  </h3>
+                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                    <div className="flex items-center gap-1">
+                      <Calendar className="h-4 w-4" />
+                      <span>{new Date(selectedExpense.expense_date).toLocaleDateString()}</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <div className="w-2 h-2 bg-orange-400 rounded-full"></div>
+                      <span>{selectedExpense.budget_categories?.name}</span>
+                    </div>
+                  </div>
+                </div>
+                <div className="text-right">
+                  <div className="text-2xl font-bold text-gray-900 mb-1">
+                    {formatCurrency(selectedExpense.amount)}
+                  </div>
+                  <Badge className={`${getStatusColor(selectedExpense.status)}`}>
+                    <div className="flex items-center space-x-1">
+                      {getStatusIcon(selectedExpense.status)}
+                      <span className="capitalize">{selectedExpense.status}</span>
+                    </div>
+                  </Badge>
+                </div>
+              </div>
+
+              {/* Details Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600 uppercase tracking-wide">
+                      Expense Information
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Expense ID:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedExpense.id}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Amount:</span>
+                      <span className="text-sm font-medium text-gray-900">{formatCurrency(selectedExpense.amount)}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Date:</span>
+                      <span className="text-sm font-medium text-gray-900">
+                        {new Date(selectedExpense.expense_date).toLocaleDateString('en-US', {
+                          year: 'numeric',
+                          month: 'long',
+                          day: 'numeric'
+                        })}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Status:</span>
+                      <Badge className={`${getStatusColor(selectedExpense.status)} text-xs`}>
+                        {selectedExpense.status}
+                      </Badge>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader className="pb-3">
+                    <CardTitle className="text-sm font-medium text-gray-600 uppercase tracking-wide">
+                      Budget Category
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Category:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedExpense.budget_categories?.name}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-sm text-gray-600">Category ID:</span>
+                      <span className="text-sm font-medium text-gray-900">{selectedExpense.category_id}</span>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex items-center justify-end gap-3 pt-4 border-t border-gray-200">
+                <Button variant="outline" size="sm">
+                  <Download className="h-4 w-4 mr-2" />
+                  Export
+                </Button>
+                <Button variant="outline" size="sm">
+                  Edit
+                </Button>
+                <Button 
+                  variant="outline" 
+                  onClick={() => setIsExpenseModalOpen(false)}
+                >
+                  Close
+                </Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

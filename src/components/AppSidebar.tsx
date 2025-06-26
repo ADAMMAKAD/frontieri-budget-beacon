@@ -3,6 +3,8 @@ import { LayoutDashboard, PieChart, DollarSign, TrendingUp, FileText, Shield, Se
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 import { hasPermission, getRoleDisplayName, getRoleColor, type UserRole } from "@/utils/rolePermissions";
+import { apiClient } from "@/lib/api";
+import { useState, useEffect } from "react";
 import {
   Sidebar,
   SidebarContent,
@@ -91,6 +93,11 @@ const managementItems = [
     icon: Users
   },
   { 
+    id: "project-admin", 
+    title: "Project Admin", 
+    icon: ShieldCheck
+  },
+  { 
     id: "budget-versions", 
     title: "Budget Versions", 
     icon: GitBranch
@@ -140,8 +147,26 @@ export function AppSidebar({ activeSection, setActiveSection }: AppSidebarProps)
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
   const isCollapsed = state === "collapsed";
+  const [isProjectAdmin, setIsProjectAdmin] = useState(false);
   
   const userRole = (user?.role || 'user') as UserRole;
+  
+  // Check if user is a project admin for any project
+  useEffect(() => {
+    const checkProjectAdminStatus = async () => {
+      if (!user?.id) return;
+      
+      try {
+        const adminProjects = await apiClient.getUserAdminProjects();
+        setIsProjectAdmin(adminProjects.length > 0);
+      } catch (error) {
+        console.error('Error checking project admin status:', error);
+        setIsProjectAdmin(false);
+      }
+    };
+    
+    checkProjectAdminStatus();
+  }, [user?.id]);
   
   const shouldShowMenuItem = (item: any) => {
     // Map menu item IDs to resource names
@@ -156,6 +181,7 @@ export function AppSidebar({ activeSection, setActiveSection }: AppSidebarProps)
       'expenses': 'expenses',
       'business-units': 'business-units',
       'project-teams': 'project-teams',
+      'project-admin': 'project-admin',
       'budget-versions': 'budget-versions',
       'approvals': 'approvals',
       'notifications': 'notifications',
@@ -168,6 +194,12 @@ export function AppSidebar({ activeSection, setActiveSection }: AppSidebarProps)
     };
     
     const resource = resourceMap[item.id] || item.id;
+    
+    // Special case for project-admin: show if user has system permission OR is a project admin
+    if (item.id === 'project-admin') {
+      return hasPermission(userRole, resource, 'write') || isProjectAdmin;
+    }
+    
     return hasPermission(userRole, resource);
   };
   
@@ -179,6 +211,8 @@ export function AppSidebar({ activeSection, setActiveSection }: AppSidebarProps)
   const handleNavigation = (itemId: string) => {
     if (itemId === "admin") {
       navigate("/admin");
+    } else if (itemId === "project-admin") {
+      navigate("/project-admin");
     } else {
       navigate("/");
       setActiveSection(itemId);

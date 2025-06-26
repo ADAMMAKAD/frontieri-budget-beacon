@@ -3,6 +3,7 @@ const router = express.Router();
 const pool = require('../config/database');
 const { authenticateToken, requireRole } = require('../middleware/auth');
 const { body, validationResult } = require('express-validator');
+const { notifyBudgetChange } = require('../utils/notificationHelper');
 
 // Get all budget categories
 router.get('/', authenticateToken, async (req, res) => {
@@ -87,7 +88,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
 });
 
 // Create budget category
-router.post('/', authenticateToken, requireRole(['admin', 'manager']), [
+router.post('/', authenticateToken, [
     body('name').notEmpty().trim().isLength({ min: 1, max: 100 }),
     body('project_id').notEmpty().isUUID(),
     body('allocated_amount').isNumeric({ min: 0 })
@@ -116,6 +117,14 @@ router.post('/', authenticateToken, requireRole(['admin', 'manager']), [
             [name, project_id, allocated_amount]
         );
 
+        // Send notification about new budget category
+        try {
+            await notifyBudgetChange(project_id, `New budget category "${name}" created`, 'created');
+        } catch (notificationError) {
+            console.error('Failed to send budget change notification:', notificationError);
+            // Don't fail the creation if notification fails
+        }
+
         res.status(201).json({ category: result.rows[0] });
     } catch (error) {
         console.error('Create budget category error:', error);
@@ -124,7 +133,7 @@ router.post('/', authenticateToken, requireRole(['admin', 'manager']), [
 });
 
 // Update budget category
-router.put('/:id', authenticateToken, requireRole(['admin', 'manager']), [
+router.put('/:id', authenticateToken, [
     body('name').optional().notEmpty().trim().isLength({ min: 1, max: 100 }),
     body('description').optional().trim().isLength({ max: 500 }),
     body('budget_limit').optional().isNumeric({ min: 0 })
@@ -198,6 +207,22 @@ router.put('/:id', authenticateToken, requireRole(['admin', 'manager']), [
         `;
         
         const result = await pool.query(query, values);
+
+        // Send notification about budget category update
+        try {
+            const oldCategory = existingCategory.rows[0];
+            const newCategory = result.rows[0];
+            let changeMessage = `Budget category "${newCategory.name}" updated`;
+            
+            if (budget_limit !== undefined && oldCategory.budget_limit !== newCategory.budget_limit) {
+                changeMessage += ` - Budget limit changed from ${oldCategory.budget_limit || 'N/A'} to ${newCategory.budget_limit || 'N/A'}`;
+            }
+            
+            await notifyBudgetChange(newCategory.project_id, changeMessage, 'updated');
+        } catch (notificationError) {
+            console.error('Failed to send budget change notification:', notificationError);
+            // Don't fail the update if notification fails
+        }
 
         res.json({ category: result.rows[0] });
     } catch (error) {

@@ -77,7 +77,7 @@ export const AdminProjects = () => {
   const fetchBusinessUnits = async () => {
     try {
       const data = await apiClient.getBusinessUnits();
-      setBusinessUnits(Array.isArray(data) ? data : []);
+      setBusinessUnits(data.business_units || []);
     } catch (error) {
       console.error('Error fetching business units:', error);
       // Fallback to hardcoded values if API fails

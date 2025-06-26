@@ -31,7 +31,7 @@ export function BudgetChart() {
 
   const fetchBusinessUnits = async () => {
     try {
-      const data = await apiClient.get('/business-units?limit=5');
+      const data = await apiClient.get('/api/business-units?limit=5');
       setBusinessUnits(data || []);
     } catch (error) {
       console.error('Error fetching business units:', error);

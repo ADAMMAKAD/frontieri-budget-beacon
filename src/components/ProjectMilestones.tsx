@@ -59,10 +59,31 @@ const ProjectMilestones = () => {
 
   const fetchData = async () => {
     try {
-      const [milestonesResponse, projectsResponse] = await Promise.all([
-        apiClient.get('/project-milestones'),
-        apiClient.get('/projects')
-      ]);
+      // Check if user is a project admin
+      const isProjectAdmin = user?.role === 'user' || user?.role === 'member';
+      
+      let projectsResponse;
+      let milestonesResponse;
+      
+      if (isProjectAdmin) {
+        // For project admins, get only their assigned projects
+        const adminProjects = await apiClient.getUserAdminProjects();
+        projectsResponse = { projects: adminProjects };
+        
+        // Get milestones only for admin projects
+        if (adminProjects.length > 0) {
+          const projectIds = adminProjects.map(p => p.id).join(',');
+          milestonesResponse = await apiClient.get(`/api/project-milestones?project_ids=${projectIds}`);
+        } else {
+          milestonesResponse = { data: [] };
+        }
+      } else {
+        // For system admins/managers, get all projects and milestones
+        [milestonesResponse, projectsResponse] = await Promise.all([
+          apiClient.get('/api/project-milestones'),
+          apiClient.get('/api/projects')
+        ]);
+      }
 
       if (milestonesResponse.error) throw new Error(milestonesResponse.error);
       if (projectsResponse.error) throw new Error(projectsResponse.error);
@@ -94,7 +115,7 @@ const ProjectMilestones = () => {
 
       if (editingMilestone) {
         // Update existing milestone
-        const response = await apiClient.put(`/project-milestones/${editingMilestone.id}`, {
+        const response = await apiClient.put(`/api/project-milestones/${editingMilestone.id}`, {
           ...formData,
           updated_at: new Date().toISOString()
         });
@@ -107,7 +128,7 @@ const ProjectMilestones = () => {
         });
       } else {
         // Create new milestone
-        const response = await apiClient.post('/project-milestones', {
+        const response = await apiClient.post('/api/project-milestones', {
           ...formData,
           created_by: user?.id
         });
@@ -136,7 +157,7 @@ const ProjectMilestones = () => {
     if (!confirm('Are you sure you want to delete this milestone?')) return;
 
     try {
-      const response = await apiClient.delete(`/project-milestones/${id}`);
+      const response = await apiClient.delete(`/api/project-milestones/${id}`);
 
       if (response.error) throw new Error(response.error);
 
