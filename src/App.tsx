@@ -7,10 +7,13 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "@/hooks/useAuth";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import { CurrencyProvider } from "@/contexts/CurrencyContext";
+import { ProjectProvider } from "@/contexts/ProjectContext";
 import ProtectedRoute from "@/components/ProtectedRoute";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import AdminPage from "./pages/AdminPage";
+import ProjectAdminPage from "./pages/ProjectAdminPage";
+import ExpenseDetail from "./pages/ExpenseDetail";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -19,8 +22,9 @@ const App = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider>
       <CurrencyProvider>
-        <AuthProvider>
-          <TooltipProvider>
+        <ProjectProvider>
+          <AuthProvider>
+            <TooltipProvider>
             <Toaster />
             <Sonner />
             <BrowserRouter>
@@ -42,11 +46,28 @@ const App = () => (
                     </ProtectedRoute>
                   } 
                 />
+                <Route 
+                  path="/project-admin" 
+                  element={
+                    <ProtectedRoute>
+                      <ProjectAdminPage />
+                    </ProtectedRoute>
+                  } 
+                />
+                <Route 
+                  path="/expenses/:id" 
+                  element={
+                    <ProtectedRoute>
+                      <ExpenseDetail />
+                    </ProtectedRoute>
+                  } 
+                />
                 <Route path="*" element={<NotFound />} />
               </Routes>
             </BrowserRouter>
-          </TooltipProvider>
-        </AuthProvider>
+            </TooltipProvider>
+          </AuthProvider>
+        </ProjectProvider>
       </CurrencyProvider>
     </ThemeProvider>
   </QueryClientProvider>

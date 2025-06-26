@@ -50,7 +50,7 @@ export const UserManagement = () => {
 
   const fetchUsers = async () => {
     try {
-      const data = await apiClient.request('/admin/users');
+      const data = await apiClient.request('/api/admin/users');
       // Backend returns { users: [...], total: number, page: number, limit: number }
       setUsers(data?.users || []);
     } catch (error) {
@@ -67,7 +67,7 @@ export const UserManagement = () => {
 
   const fetchBusinessUnits = async () => {
     try {
-      const response = await apiClient.request('/business-units');
+      const response = await apiClient.request('/api/business-units');
       setBusinessUnits(response.business_units || []);
     } catch (error) {
       console.error('Error fetching business units:', error);
@@ -84,7 +84,7 @@ export const UserManagement = () => {
       };
       
       if (editingUser) {
-        await apiClient.request(`/admin/users/${editingUser.id}`, {
+        await apiClient.request(`/api/admin/users/${editingUser.id}`, {
           method: 'PUT',
           body: JSON.stringify(userDataWithTeam)
         });
@@ -94,7 +94,7 @@ export const UserManagement = () => {
           description: "User updated successfully"
         });
       } else {
-        await apiClient.request('/admin/users', {
+        await apiClient.request('/api/admin/users', {
           method: 'POST',
           body: JSON.stringify(userDataWithTeam)
         });
@@ -121,7 +121,7 @@ export const UserManagement = () => {
 
   const deleteUser = async (id: string) => {
     try {
-      await apiClient.request(`/admin/users/${id}`, {
+      await apiClient.request(`/api/admin/users/${id}`, {
         method: 'DELETE'
       });
 
@@ -143,7 +143,7 @@ export const UserManagement = () => {
 
   const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
     try {
-      await apiClient.request(`/admin/users/${userId}`, {
+      await apiClient.request(`/api/admin/users/${userId}`, {
         method: 'PUT',
         body: JSON.stringify({
           is_active: !currentStatus

@@ -28,7 +28,7 @@ export const AdminActivityLog = () => {
 
   const fetchActivities = async () => {
     try {
-      const response = await apiClient.get('/admin/activity-log?limit=100');
+      const response = await apiClient.get('/api/admin/activity-log?limit=100');
       setActivities(response.data || []);
     } catch (error) {
       console.error('Error fetching activity log:', error);

@@ -43,7 +43,7 @@ const BusinessUnitManagement = () => {
   const fetchBusinessUnits = async () => {
     try {
       const response = await apiClient.getBusinessUnits();
-      setBusinessUnits(response.data || []);
+      setBusinessUnits(response.business_units || []);
     } catch (error) {
       console.error('Error fetching business units:', error);
       toast({

@@ -51,7 +51,7 @@ export const AdminExpenses = () => {
 
     try {
       // Get expenses with project and user details
-      const data = await apiClient.request('/admin/expenses');
+      const data = await apiClient.request('/api/admin/expenses');
       setExpenses(data?.expenses || data?.data || data || []);
     } catch (error) {
       console.error('Error fetching expenses:', error);
@@ -69,7 +69,7 @@ export const AdminExpenses = () => {
     if (!user) return;
 
     try {
-      await apiClient.request(`/expenses/${id}`, {
+      await apiClient.request(`/api/expenses/${id}`, {
         method: 'PUT',
         body: JSON.stringify({ status })
       });

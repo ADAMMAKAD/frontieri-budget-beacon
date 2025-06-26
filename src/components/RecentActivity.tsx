@@ -10,6 +10,7 @@ import {
   Users, 
   AlertTriangle, 
   GitBranch,
+  CheckCircle,
   Filter,
   RefreshCw
 } from 'lucide-react';
@@ -62,6 +63,10 @@ const getActivityIcon = (type: string) => {
     case 'project_created':
     case 'project_updated':
       return Users;
+    case 'milestone_completed':
+    case 'milestone_created':
+    case 'milestone_updated':
+      return CheckCircle;
     case 'budget_version_created':
     case 'budget_version_approved':
       return GitBranch;
@@ -102,7 +107,7 @@ export function RecentActivity() {
   const fetchBusinessUnits = async () => {
     try {
       const data = await apiClient.getBusinessUnits();
-      setBusinessUnits(Array.isArray(data) ? data : []);
+      setBusinessUnits(data.business_units || []);
     } catch (error) {
       console.error('Error fetching business units:', error);
       // Fallback to hardcoded values if API fails
@@ -119,45 +124,39 @@ export function RecentActivity() {
     try {
       setLoading(true);
       
-      // Fetch recent expenses
-      const expensesResponse = await apiClient.request('/expenses?limit=10&page=1');
+      // Fetch recent expenses with more details
+      const expensesResponse = await apiClient.request('/api/expenses?limit=15&page=1');
       const expenses = expensesResponse?.expenses || expensesResponse?.data || [];
       
       // Fetch recent projects
       const projectsResponse = await apiClient.getProjects();
       const projects = Array.isArray(projectsResponse) ? projectsResponse : projectsResponse?.data || [];
       
-      // Fetch recent budget versions if available
-      let budgetVersions = [];
-      try {
-        const budgetResponse = await apiClient.request('/budget-versions?limit=5');
-        budgetVersions = budgetResponse?.data || [];
-      } catch (error) {
-        console.log('Budget versions endpoint not available');
-      }
+      // Fetch recent milestones
+      const milestonesResponse = await apiClient.request('/api/project-milestones?limit=10&page=1');
+      const milestones = milestonesResponse?.milestones || milestonesResponse?.data || [];
       
-      // Fetch admin activity log if user has access
-      let adminActivities = [];
-      try {
-        const adminResponse = await apiClient.request('/admin/activity-log?limit=5');
-        adminActivities = adminResponse?.data || [];
-      } catch (error) {
-        console.log('Admin activity log not accessible');
-      }
+      // Fetch budget versions
+      const budgetVersionsResponse = await apiClient.request('/api/budget-versions?limit=5&page=1');
+      const budgetVersions = budgetVersionsResponse?.versions || budgetVersionsResponse?.data || [];
       
       const allActivities: Activity[] = [];
       
-      // Process expenses
+      // Process expenses with enhanced information
       const businessUnitNames = businessUnits.map(unit => unit.name);
       expenses.forEach((expense: any) => {
         if (businessUnitNames.includes(expense.project_name || expense.department)) {
+          const statusText = expense.status === 'pending' ? 'Submitted' : 
+                           expense.status === 'approved' ? 'Approved' : 
+                           expense.status === 'rejected' ? 'Rejected' : expense.status;
+          
           allActivities.push({
             id: `expense-${expense.id}`,
             type: `expense_${expense.status}`,
-            title: `Expense ${expense.status === 'pending' ? 'Submitted' : expense.status === 'approved' ? 'Approved' : 'Rejected'}`,
+            title: `Expense ${statusText}`,
             description: `${expense.description} - ${expense.project_name || 'Unknown Project'}`,
             amount: parseFloat(expense.amount),
-            time: formatTimeAgo(expense.created_at),
+            time: formatTimeAgo(expense.updated_at || expense.created_at),
             icon: getActivityIcon(`expense_${expense.status}`),
             status: expense.status,
             department: expense.project_name || expense.department
@@ -165,18 +164,41 @@ export function RecentActivity() {
         }
       });
       
-      // Process projects
-      projects.slice(0, 5).forEach((project: any) => {
+      // Process projects with budget updates
+      projects.slice(0, 8).forEach((project: any) => {
         if (businessUnitNames.includes(project.department)) {
+          const budgetUtilization = project.total_budget > 0 ? 
+            Math.round((project.spent_budget / project.total_budget) * 100) : 0;
+          
           allActivities.push({
             id: `project-${project.id}`,
             type: 'project_updated',
-            title: 'Project Updated',
-            description: `${project.name} - ${project.status}`,
+            title: 'Budget Update',
+            description: `${project.name} - ${budgetUtilization}% utilized`,
             amount: project.total_budget ? parseFloat(project.total_budget) : undefined,
             time: formatTimeAgo(project.updated_at || project.created_at),
             icon: getActivityIcon('project_updated'),
-            status: project.status,
+            status: budgetUtilization > 90 ? 'critical' : budgetUtilization > 75 ? 'warning' : 'active',
+            department: project.department
+          });
+        }
+      });
+      
+      // Process milestones
+      milestones.forEach((milestone: any) => {
+        const project = projects.find(p => p.id === milestone.project_id);
+        if (project && businessUnitNames.includes(project.department)) {
+          allActivities.push({
+            id: `milestone-${milestone.id}`,
+            type: `milestone_${milestone.status}`,
+            title: `Milestone ${milestone.status === 'completed' ? 'Completed' : 
+                              milestone.status === 'in_progress' ? 'In Progress' : 
+                              milestone.status === 'overdue' ? 'Overdue' : 'Updated'}`,
+            description: `${milestone.title} - ${project.name}`,
+            amount: undefined,
+            time: formatTimeAgo(milestone.updated_at || milestone.created_at),
+            icon: getActivityIcon(`milestone_${milestone.status}`),
+            status: milestone.status,
             department: project.department
           });
         }
@@ -184,38 +206,47 @@ export function RecentActivity() {
       
       // Process budget versions
       budgetVersions.forEach((version: any) => {
-        allActivities.push({
-          id: `budget-${version.id}`,
-          type: `budget_version_${version.status}`,
-          title: `Budget Version ${version.status === 'approved' ? 'Approved' : 'Created'}`,
-          description: `${version.title} - Version ${version.version_number}`,
-          time: formatTimeAgo(version.created_at),
-          icon: getActivityIcon(`budget_version_${version.status}`),
-          status: version.status
-        });
+        const project = projects.find(p => p.id === version.project_id);
+        if (project && businessUnitNames.includes(project.department)) {
+          allActivities.push({
+            id: `budget-version-${version.id}`,
+            type: `budget_version_${version.status}`,
+            title: `Budget ${version.status === 'approved' ? 'Approved' : 
+                             version.status === 'pending' ? 'Submitted' : 'Updated'}`,
+            description: `${version.version_name} - ${project.name}`,
+            amount: version.total_budget ? parseFloat(version.total_budget) : undefined,
+            time: formatTimeAgo(version.updated_at || version.created_at),
+            icon: getActivityIcon(`budget_version_${version.status}`),
+            status: version.status,
+            department: project.department
+          });
+        }
       });
       
-      // Process admin activities
-      adminActivities.forEach((activity: any) => {
-        allActivities.push({
-          id: `admin-${activity.id}`,
-          type: activity.action,
-          title: `${activity.action.charAt(0).toUpperCase() + activity.action.slice(1)} ${activity.target_table}`,
-          description: `${activity.target_table} ${activity.action} by ${activity.admin_name || 'Admin'}`,
-          time: formatTimeAgo(activity.created_at),
-          icon: getActivityIcon(activity.action),
-          status: 'completed'
-        });
-      });
-      
-      // Sort by most recent and limit to 8 items
+      // Sort by most recent and limit to 10 items
       const sortedActivities = allActivities
         .sort((a, b) => {
-          const timeA = new Date(a.time === 'Just now' ? new Date() : a.time).getTime();
-          const timeB = new Date(b.time === 'Just now' ? new Date() : b.time).getTime();
-          return timeB - timeA;
+          // Convert time strings to dates for proper sorting
+          const getTimeValue = (timeStr: string) => {
+            if (timeStr === 'Just now') return new Date().getTime();
+            if (timeStr.includes('minutes ago')) {
+              const minutes = parseInt(timeStr.split(' ')[0]);
+              return new Date().getTime() - (minutes * 60 * 1000);
+            }
+            if (timeStr.includes('hours ago')) {
+              const hours = parseInt(timeStr.split(' ')[0]);
+              return new Date().getTime() - (hours * 60 * 60 * 1000);
+            }
+            if (timeStr.includes('days ago')) {
+              const days = parseInt(timeStr.split(' ')[0]);
+              return new Date().getTime() - (days * 24 * 60 * 60 * 1000);
+            }
+            return new Date(timeStr).getTime();
+          };
+          
+          return getTimeValue(b.time) - getTimeValue(a.time);
         })
-        .slice(0, 8);
+        .slice(0, 10);
       
       setActivities(sortedActivities);
     } catch (error) {

@@ -7,7 +7,7 @@ const { body, validationResult } = require('express-validator');
 // Get all milestones (with role-based filtering)
 router.get('/', authenticateToken, async (req, res) => {
     try {
-        const { page = 1, limit = 20, status, project_id } = req.query;
+        const { page = 1, limit = 20, status, project_id, project_ids } = req.query;
         const offset = (page - 1) * limit;
         
         let query = `
@@ -29,8 +29,18 @@ router.get('/', authenticateToken, async (req, res) => {
             params.push(req.user.id);
         }
         
-        // Filter by project if specified
-        if (project_id) {
+        // Filter by multiple project IDs if specified (for project admins)
+        if (project_ids) {
+            const projectIdArray = project_ids.split(',').filter(id => id.trim());
+            if (projectIdArray.length > 0) {
+                const placeholders = projectIdArray.map((_, index) => `$${paramCount + index + 1}`).join(',');
+                query += ` AND pm.project_id IN (${placeholders})`;
+                params.push(...projectIdArray);
+                paramCount += projectIdArray.length;
+            }
+        }
+        // Filter by single project if specified
+        else if (project_id) {
             paramCount++;
             query += ` AND pm.project_id = $${paramCount}`;
             params.push(project_id);
@@ -251,7 +261,7 @@ router.put('/:id', authenticateToken, [
     body('due_date').optional().isISO8601(),
     // assigned_to validation removed - column doesn't exist in schema
     body('status').optional().isIn(['not_started', 'in_progress', 'completed', 'overdue']),
-    body('completion_date').optional().isISO8601()
+    body('progress').optional().isInt({ min: 0, max: 100 })
 ], async (req, res) => {
     try {
         const errors = validationResult(req);
@@ -260,7 +270,7 @@ router.put('/:id', authenticateToken, [
         }
 
         const { id } = req.params;
-        const { title, description, due_date, status, completion_date } = req.body;
+        const { title, description, due_date, status, progress } = req.body;
         
         // Check if milestone exists and user has access
         const milestoneAccess = await pool.query(
@@ -317,16 +327,11 @@ router.put('/:id', authenticateToken, [
             updates.push(`status = $${paramCount}`);
             values.push(status);
             paramCount++;
-            
-            // Auto-set completion date if status is completed
-            if (status === 'completed' && !completion_date) {
-                updates.push(`completion_date = CURRENT_TIMESTAMP`);
-            }
         }
         
-        if (completion_date !== undefined) {
-            updates.push(`completion_date = $${paramCount}`);
-            values.push(completion_date);
+        if (progress !== undefined) {
+            updates.push(`progress = $${paramCount}`);
+            values.push(progress);
             paramCount++;
         }
         
@@ -360,10 +365,10 @@ router.delete('/:id', authenticateToken, requireRole(['admin', 'manager']), asyn
         
         // Check if milestone exists and user has access
         const milestoneAccess = await pool.query(
-            `SELECT pm.*, p.manager_id FROM project_milestones pm
+            `SELECT pm.*, p.project_manager_id FROM project_milestones pm
              LEFT JOIN projects p ON pm.project_id = p.id
              WHERE pm.id = $1 AND (
-                 p.manager_id = $2 OR 
+                 p.project_manager_id = $2 OR 
                  $3 = 'admin'
              )`,
             [id, req.user.id, req.user.role]
@@ -410,10 +415,7 @@ router.get('/project/:projectId/stats', authenticateToken, async (req, res) => {
                 COUNT(CASE WHEN status = 'in_progress' THEN 1 END) as in_progress_milestones,
                 COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed_milestones,
                 COUNT(CASE WHEN status = 'overdue' THEN 1 END) as overdue_milestones,
-                COUNT(CASE WHEN due_date < CURRENT_DATE AND status != 'completed' THEN 1 END) as past_due_milestones,
-                ROUND(AVG(CASE WHEN completion_date IS NOT NULL AND due_date IS NOT NULL THEN 
-                    EXTRACT(EPOCH FROM (completion_date - due_date))/86400 
-                END), 2) as avg_completion_delay_days
+                COUNT(CASE WHEN due_date < CURRENT_DATE AND status != 'completed' THEN 1 END) as past_due_milestones
             FROM project_milestones
             WHERE project_id = $1
         `;

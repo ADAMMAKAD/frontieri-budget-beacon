@@ -31,15 +31,18 @@ app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true }));
 
 // Routes
-app.use('/api/auth', require('./routes/auth'));
+app.use('/auth', require('./routes/auth'));
 app.use('/api/projects', require('./routes/projects'));
 app.use('/api/business-units', require('./routes/business-units'));
 app.use('/api/expenses', require('./routes/expenses'));
 app.use('/api/budget-categories', require('./routes/budget-categories'));
 app.use('/api/budget-versions', require('./routes/budget-versions'));
 app.use('/api/project-milestones', require('./routes/project-milestones'));
+app.use('/api/project-teams', require('./routes/project-teams'));
+app.use('/api/project-admin', require('./routes/project-admin'));
 app.use('/api/notifications', require('./routes/notifications'));
 app.use('/api/admin', adminRoutes);
+app.use('/api/analytics', require('./routes/analytics'));
 
 // Health check
 app.get('/health', (req, res) => {

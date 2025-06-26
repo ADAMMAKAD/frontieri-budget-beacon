@@ -53,7 +53,7 @@ router.get('/:id', authenticateToken, async (req, res) => {
                    COALESCE(SUM(e.amount), 0) as total_expenses
             FROM business_units bu
             LEFT JOIN projects p ON bu.id = p.business_unit_id
-            LEFT JOIN users u ON bu.id = u.team_id
+            LEFT JOIN profiles u ON bu.id = u.team_id
             LEFT JOIN expenses e ON p.id = e.project_id
             WHERE bu.id = $1
             GROUP BY bu.id
@@ -245,7 +245,7 @@ router.delete('/:id', authenticateToken, requireRole(['admin']), async (req, res
         
         // Check if business unit has associated users
         const userCount = await pool.query(
-            'SELECT COUNT(*) FROM users WHERE business_unit_id = $1',
+            'SELECT COUNT(*) FROM profiles WHERE team_id = $1',
             [id]
         );
         
@@ -344,7 +344,7 @@ router.get('/:id/stats', authenticateToken, async (req, res) => {
                 END as budget_utilization
             FROM business_units bu
             LEFT JOIN projects p ON bu.id = p.business_unit_id
-            LEFT JOIN users u ON bu.id = u.team_id
+            LEFT JOIN profiles u ON bu.id = u.team_id
             LEFT JOIN expenses e ON p.id = e.project_id ${dateFilter}
             WHERE bu.id = $1
             GROUP BY bu.id, bu.name

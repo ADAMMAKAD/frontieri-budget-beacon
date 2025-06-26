@@ -3,6 +3,7 @@ const express = require('express');
 const { body, validationResult } = require('express-validator');
 const pool = require('../config/database');
 const { authenticateToken, requireRole } = require('../middleware/auth');
+const { notifyNewProject, notifyProjectAdminAssignment } = require('../utils/notificationHelper');
 
 const router = express.Router();
 
@@ -246,6 +247,28 @@ router.post('/', authenticateToken, [
             [name, description, total_budget, currency, start_date, end_date, department, req.user.id, business_unit_id]
         );
 
+        // Automatically add the project creator as project admin in project_teams table
+        // This ensures they can see the project and approve expenses
+        try {
+            await pool.query(
+                `INSERT INTO project_teams (project_id, user_id, role) VALUES ($1, $2, $3)`,
+                [result.rows[0].id, req.user.id, 'admin']
+            );
+        } catch (teamError) {
+            console.error('Failed to add project creator to team:', teamError);
+            // Don't fail project creation if team assignment fails
+        }
+
+        // Send notifications about new project creation
+        try {
+            await notifyNewProject(result.rows[0].id);
+            // Notify the project manager about their assignment
+            await notifyProjectAdminAssignment(req.user.id, result.rows[0].id, req.user.id);
+        } catch (notificationError) {
+            console.error('Failed to send project creation notifications:', notificationError);
+            // Don't fail the project creation if notification fails
+        }
+
         res.status(201).json({ project: result.rows[0] });
     } catch (error) {
         console.error('Create project error:', error);
@@ -270,6 +293,14 @@ router.put('/:id', authenticateToken, [
 
         const { id } = req.params;
         const updates = req.body;
+        
+        // Filter out empty strings for UUID fields to prevent UUID syntax errors
+        const uuidFields = ['project_manager_id', 'business_unit_id', 'team_id'];
+        uuidFields.forEach(field => {
+            if (updates[field] === '') {
+                updates[field] = null;
+            }
+        });
         
         // Check if user has permission to update this project
         if (req.user.role !== 'admin') {
@@ -355,9 +386,9 @@ router.get('/dashboard/metrics', authenticateToken, async (req, res) => {
         const result = await pool.query(metricsQuery, params);
         const metrics = result.rows[0];
         
-        // Calculate budget utilization
-        const budgetUtilization = metrics.total_allocated > 0 
-            ? (metrics.total_spent / metrics.total_allocated * 100).toFixed(1)
+        // Calculate budget utilization based on total budget vs spent
+        const budgetUtilization = metrics.total_budget > 0 
+            ? (metrics.total_spent / metrics.total_budget * 100).toFixed(1)
             : 0;
 
         res.json({

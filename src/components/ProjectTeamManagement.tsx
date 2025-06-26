@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { Plus, Users, Search, UserMinus } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useProjectRefresh } from '@/contexts/ProjectContext';
 
 interface TeamMember {
   id: string;
@@ -54,6 +55,7 @@ const ProjectTeamManagement = () => {
   });
   const { toast } = useToast();
   const { user } = useAuth();
+  const { triggerRefresh } = useProjectRefresh();
 
   useEffect(() => {
     fetchData();
@@ -109,6 +111,7 @@ const ProjectTeamManagement = () => {
       setIsAdding(false);
       setNewMember({ project_id: '', user_id: '', role: 'member' });
       fetchData();
+      triggerRefresh(); // Trigger global refresh for all components
     } catch (error: any) {
       console.error('Error adding team member:', error);
       toast({
@@ -133,6 +136,7 @@ const ProjectTeamManagement = () => {
       });
 
       fetchData();
+      triggerRefresh(); // Trigger global refresh for all components
     } catch (error: any) {
       console.error('Error removing team member:', error);
       toast({

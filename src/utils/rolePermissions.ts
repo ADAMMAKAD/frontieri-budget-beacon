@@ -38,6 +38,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
   manager: [
     { resource: 'business-units', action: 'write' },
     { resource: 'project-teams', action: 'write' },
+    { resource: 'project-admin', action: 'write' },
     { resource: 'budget-versions', action: 'write' },
     { resource: 'approvals', action: 'write' },
     { resource: 'budget-planning', action: 'write' },
@@ -48,6 +49,7 @@ const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     { resource: 'admin', action: 'admin' },
     { resource: 'user-management', action: 'admin' },
     { resource: 'user-registration', action: 'admin' },
+    { resource: 'project-admin', action: 'admin' },
     { resource: 'audit', action: 'admin' },
     { resource: 'system-settings', action: 'admin' },
   ],
@@ -124,6 +126,7 @@ export function getAccessibleMenuItems(userRole: UserRole | string | undefined) 
     { id: 'expenses', resource: 'expenses' },
     { id: 'business-units', resource: 'business-units' },
     { id: 'project-teams', resource: 'project-teams' },
+    { id: 'project-admin', resource: 'project-admin' },
     { id: 'budget-versions', resource: 'budget-versions' },
     { id: 'approvals', resource: 'approvals' },
     { id: 'notifications', resource: 'notifications' },

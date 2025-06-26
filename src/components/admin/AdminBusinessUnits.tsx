@@ -38,8 +38,8 @@ export const AdminBusinessUnits = () => {
   const fetchBusinessUnits = async () => {
     try {
       const data = await apiClient.getBusinessUnits();
-      // Ensure data is always an array
-      setBusinessUnits(Array.isArray(data) ? data : []);
+      // Extract business_units array from the response
+      setBusinessUnits(data.business_units || []);
     } catch (error) {
       console.error('Error fetching business units:', error);
       setBusinessUnits([]); // Set empty array on error
