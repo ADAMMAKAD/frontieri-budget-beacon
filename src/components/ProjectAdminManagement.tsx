@@ -102,9 +102,10 @@ export default function ProjectAdminManagement({ projectId, projectName }: Proje
   const fetchUsers = async () => {
     try {
       const response = await apiClient.get('/api/admin/users');
-      setUsers(response);
+      setUsers(Array.isArray(response) ? response : response.users || []);
     } catch (error) {
       console.error('Error fetching users:', error);
+      setUsers([]);
     }
   };
 

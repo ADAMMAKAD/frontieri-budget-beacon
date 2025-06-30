@@ -72,10 +72,10 @@ export default function ProjectAdminDashboard() {
             apiClient.get(`/api/project-teams?project_id=${project.id}`)
           ]);
           
-          const totalBudget = budgetCategories.reduce((sum: number, cat: any) => sum + parseFloat(cat.allocated_amount || 0), 0);
-          const spentAmount = expenses.reduce((sum: number, exp: any) => 
-            exp.status === 'approved' ? sum + parseFloat(exp.amount || 0) : sum, 0);
-          const pendingExpenses = expenses.filter((exp: any) => exp.status === 'pending').length;
+          const totalBudget = Array.isArray(budgetCategories) ? budgetCategories.reduce((sum: number, cat: any) => sum + parseFloat(cat.allocated_amount || 0), 0) : 0;
+          const spentAmount = Array.isArray(expenses) ? expenses.reduce((sum: number, exp: any) => 
+            exp.status === 'approved' ? sum + parseFloat(exp.amount || 0) : sum, 0) : 0;
+          const pendingExpenses = Array.isArray(expenses) ? expenses.filter((exp: any) => exp.status === 'pending').length : 0;
           
           stats[project.id] = {
             totalBudget,
