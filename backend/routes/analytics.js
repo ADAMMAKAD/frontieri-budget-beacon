@@ -281,7 +281,7 @@ router.get('/insights', authenticateToken, async (req, res) => {
         SELECT 
           COUNT(CASE WHEN p.status = 'completed' THEN 1 END) as completed,
           COUNT(*) as total,
-          AVG(EXTRACT(DAYS FROM (COALESCE(p.end_date, CURRENT_DATE) - p.start_date))) as avg_duration
+          AVG(EXTRACT(EPOCH FROM (COALESCE(p.end_date, CURRENT_DATE) - p.start_date)) / 86400) as avg_duration
         FROM projects p
         ${userFilter}
       ),

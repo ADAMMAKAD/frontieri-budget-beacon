@@ -11,7 +11,7 @@ interface CurrencyConfig {
 }
 
 const CURRENCIES: Record<Currency, CurrencyConfig> = {
-  ETB: { code: 'ETB', symbol: 'ETB', name: 'Ethiopian Birr', rate: 56.8 },
+  ETB: { code: 'ETB', symbol: 'ETB', name: 'Ethiopian Birr', rate: 135.0 },
   USD: { code: 'USD', symbol: '$', name: 'US Dollar', rate: 1.0 },
 };
 
