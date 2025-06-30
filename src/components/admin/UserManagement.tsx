@@ -1,64 +1,58 @@
-
 import { useState, useEffect } from 'react';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from '@/components/ui/badge';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog';
+import { Badge } from '@/components/ui/badge';
 import { useToast } from '@/hooks/use-toast';
-import { Plus, Trash2, Edit, UserCog } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
-import { useRole } from '@/hooks/useRole';
-import { supabase } from '@/integrations/supabase/client';
+import { Plus, Edit, Trash2, Users, Shield, UserCheck, UserX } from 'lucide-react';
 
 interface User {
   id: string;
-  full_name: string | null;
-  department: string | null;
+  email: string;
+  full_name: string;
   role: string;
+  is_active: boolean;
   created_at: string;
+  last_login?: string;
+  team_name?: string;
+  team_id?: string;
 }
 
-type AppRole = 'admin' | 'project_admin' | 'project_manager' | 'finance_manager' | 'user';
+interface BusinessUnit {
+  id: string;
+  name: string;
+}
 
 export const UserManagement = () => {
   const [users, setUsers] = useState<User[]>([]);
+  const [businessUnits, setBusinessUnits] = useState<BusinessUnit[]>([]);
   const [loading, setLoading] = useState(true);
   const [dialogOpen, setDialogOpen] = useState(false);
-  const [newUserData, setNewUserData] = useState({
+  const [editingUser, setEditingUser] = useState<User | null>(null);
+  const [userData, setUserData] = useState({
     email: '',
-    password: '',
     full_name: '',
-    department: '',
-    role: 'user' as AppRole
+    role: 'user',
+    status: 'active',
+    team_id: ''
   });
   const { toast } = useToast();
-  const { user: currentUser } = useAuth();
-  const { canManageUsers, isAdmin } = useRole();
 
   useEffect(() => {
-    if (canManageUsers()) {
-      fetchUsers();
-    } else {
-      setLoading(false);
-    }
-  }, [canManageUsers]);
+    fetchUsers();
+    fetchBusinessUnits();
+  }, []);
 
   const fetchUsers = async () => {
     try {
-      // Get users from Supabase profiles table
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        throw new Error(error.message);
-      }
-      setUsers(data || []);
+      const data = await apiClient.request('/api/admin/users');
+      // Backend returns { users: [...], total: number, page: number, limit: number }
+      setUsers(data?.users || []);
     } catch (error) {
       console.error('Error fetching users:', error);
       toast({
@@ -71,92 +65,65 @@ export const UserManagement = () => {
     }
   };
 
-  const createUser = async () => {
+  const fetchBusinessUnits = async () => {
     try {
-      // Call supabase.auth.admin.createUser (Server-side), for client: send invite/signup
-      const { error } = await supabase.auth.signUp({
-        email: newUserData.email,
-        password: newUserData.password,
-        options: {
-          data: {
-            full_name: newUserData.full_name,
-            department: newUserData.department,
-            role: newUserData.role,
-          },
-          emailRedirectTo: `${window.location.origin}/`
-        }
-      });
+      const response = await apiClient.request('/api/business-units');
+      setBusinessUnits(response.business_units || []);
+    } catch (error) {
+      console.error('Error fetching business units:', error);
+    }
+  };
 
-      if (error) {
-        throw new Error(error.message);
+  const saveUser = async () => {
+    try {
+      const { status, ...restUserData } = userData;
+      const userDataWithTeam = {
+        ...restUserData,
+        is_active: status === 'active',
+        team_id: userData.team_id === 'none' ? null : userData.team_id
+      };
+      
+      if (editingUser) {
+        await apiClient.request(`/api/admin/users/${editingUser.id}`, {
+          method: 'PUT',
+          body: JSON.stringify(userDataWithTeam)
+        });
+
+        toast({
+          title: "Success",
+          description: "User updated successfully"
+        });
+      } else {
+        await apiClient.request('/api/admin/users', {
+          method: 'POST',
+          body: JSON.stringify(userDataWithTeam)
+        });
+
+        toast({
+          title: "Success",
+          description: "User created successfully"
+        });
       }
-
-      toast({
-        title: "Success",
-        description: "User created successfully"
-      });
 
       setDialogOpen(false);
-      setNewUserData({ email: '', password: '', full_name: '', department: '', role: 'user' });
+      setEditingUser(null);
+      setUserData({ email: '', full_name: '', role: 'user', status: 'active', team_id: '' });
       fetchUsers();
     } catch (error: any) {
-      console.error('Error creating user:', error);
+      console.error('Error saving user:', error);
       toast({
         title: "Error",
-        description: error.message || "Failed to create user",
+        description: error.message || "Failed to save user",
         variant: "destructive"
       });
     }
   };
 
-  const updateUserRole = async (userId: string, newRole: AppRole) => {
+  const deleteUser = async (id: string) => {
     try {
-      if ((newRole === 'admin' || newRole === 'project_admin') && !isAdmin) {
-        toast({
-          title: "Error",
-          description: "Only admins can assign admin or project admin roles",
-          variant: "destructive"
-        });
-        return;
-      }
-      // Update role in profiles table
-      const { error } = await supabase
-        .from('profiles')
-        .update({ role: newRole })
-        .eq('id', userId);
-
-      if (error) {
-        throw new Error(error.message);
-      }
-
-      toast({
-        title: "Success",
-        description: "User role updated successfully"
+      await apiClient.request(`/api/admin/users/${id}`, {
+        method: 'DELETE'
       });
-
-      fetchUsers();
-    } catch (error: any) {
-      console.error('Error updating user role:', error);
-      toast({
-        title: "Error",
-        description: error.message || "Failed to update user role",
-        variant: "destructive"
-      });
-    }
-  };
-
-  const deleteUser = async (userId: string) => {
-    if (!confirm('Are you sure you want to delete this user?')) return;
-
-    try {
-      // Delete from profiles table; cascade deletes auth user if FK is set up
-      const { error } = await supabase
-        .from('profiles')
-        .delete()
-        .eq('id', userId);
-      if (error) {
-        throw new Error(error.message);
-      }
 
       toast({
         title: "Success",
@@ -174,33 +141,74 @@ export const UserManagement = () => {
     }
   };
 
+  const toggleUserStatus = async (userId: string, currentStatus: boolean) => {
+    try {
+      await apiClient.request(`/api/admin/users/${userId}`, {
+        method: 'PUT',
+        body: JSON.stringify({
+          is_active: !currentStatus
+        })
+      });
+      
+      toast({
+        title: "Success",
+        description: "User status updated successfully",
+      });
+      
+      fetchUsers();
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.response?.data?.error || "Failed to update user status",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const openEditDialog = (user: User) => {
+    setEditingUser(user);
+    setUserData({
+      email: user.email,
+      full_name: user.full_name,
+      role: user.role,
+      status: user.is_active ? 'active' : 'inactive',
+      team_id: user.team_id || 'none'
+    });
+    setDialogOpen(true);
+  };
+
+  const resetForm = () => {
+    setEditingUser(null);
+    setUserData({
+      email: '',
+      full_name: '',
+      role: 'user',
+      status: 'active',
+      team_id: 'none'
+    });
+  };
+
   const getRoleBadgeColor = (role: string) => {
     switch (role) {
       case 'admin': return 'bg-red-100 text-red-800';
-      case 'project_admin': return 'bg-purple-100 text-purple-800';
-      case 'project_manager': return 'bg-blue-100 text-blue-800';
-      case 'finance_manager': return 'bg-green-100 text-green-800';
+      case 'manager': return 'bg-blue-100 text-blue-800';
+      case 'user': return 'bg-green-100 text-green-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
 
-  // Check if user has permission to manage users
-  if (!canManageUsers()) {
-    return (
-      <div className="space-y-6">
-        <Card>
-          <CardContent className="p-6">
-            <p className="text-muted-foreground">You don't have permission to manage users. Only admins can create and manage users.</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const getStatusBadgeColor = (status: string) => {
+    switch (status) {
+      case 'active': return 'bg-green-100 text-green-800';
+      case 'inactive': return 'bg-red-100 text-red-800';
+      default: return 'bg-gray-100 text-gray-800';
+    }
+  };
 
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-orange-600"></div>
+        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -210,20 +218,22 @@ export const UserManagement = () => {
       <div className="flex justify-between items-center">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">User Management</h2>
-          <p className="text-gray-600">Create and manage system users with role-based permissions</p>
+          <p className="text-gray-600">Manage system users, roles, and permissions</p>
         </div>
         <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
           <DialogTrigger asChild>
-            <Button className="bg-orange-600 hover:bg-orange-700">
+            <Button onClick={resetForm}>
               <Plus className="mr-2 h-4 w-4" />
               Add User
             </Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create New User</DialogTitle>
+              <DialogTitle>
+                {editingUser ? 'Edit User' : 'Create New User'}
+              </DialogTitle>
               <DialogDescription>
-                Add a new user to the system. Only admins can create users and assign roles.
+                {editingUser ? 'Update user details and permissions' : 'Add a new user to the system'}
               </DialogDescription>
             </DialogHeader>
             <div className="grid gap-4 py-4">
@@ -232,47 +242,56 @@ export const UserManagement = () => {
                 <Input
                   id="email"
                   type="email"
-                  value={newUserData.email}
-                  onChange={(e) => setNewUserData({ ...newUserData, email: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="password">Password</Label>
-                <Input
-                  id="password"
-                  type="password"
-                  value={newUserData.password}
-                  onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
+                  value={userData.email}
+                  onChange={(e) => setUserData({ ...userData, email: e.target.value })}
                 />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="full_name">Full Name</Label>
                 <Input
                   id="full_name"
-                  value={newUserData.full_name}
-                  onChange={(e) => setNewUserData({ ...newUserData, full_name: e.target.value })}
-                />
-              </div>
-              <div className="grid gap-2">
-                <Label htmlFor="department">Department</Label>
-                <Input
-                  id="department"
-                  value={newUserData.department}
-                  onChange={(e) => setNewUserData({ ...newUserData, department: e.target.value })}
+                  value={userData.full_name}
+                  onChange={(e) => setUserData({ ...userData, full_name: e.target.value })}
                 />
               </div>
               <div className="grid gap-2">
                 <Label htmlFor="role">Role</Label>
-                <Select value={newUserData.role} onValueChange={(value: AppRole) => setNewUserData({ ...newUserData, role: value })}>
+                <Select value={userData.role} onValueChange={(value) => setUserData({ ...userData, role: value })}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="user">User</SelectItem>
-                    <SelectItem value="project_manager">Project Manager</SelectItem>
-                    <SelectItem value="finance_manager">Finance Manager</SelectItem>
-                    {isAdmin && <SelectItem value="project_admin">Project Admin</SelectItem>}
-                    {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
+                    <SelectItem value="manager">Manager</SelectItem>
+                    <SelectItem value="admin">Admin</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="status">Status</Label>
+                <Select value={userData.status} onValueChange={(value) => setUserData({ ...userData, status: value })}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="active">Active</SelectItem>
+                    <SelectItem value="inactive">Inactive</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="grid gap-2">
+                <Label htmlFor="business_unit">Business Unit</Label>
+                <Select value={userData.team_id} onValueChange={(value) => setUserData({ ...userData, team_id: value })}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select a business unit" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="none">No Business Unit</SelectItem>
+                    {businessUnits.map((unit) => (
+                      <SelectItem key={unit.id} value={unit.id}>
+                        {unit.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -281,17 +300,58 @@ export const UserManagement = () => {
               <Button variant="outline" onClick={() => setDialogOpen(false)}>
                 Cancel
               </Button>
-              <Button onClick={createUser} className="bg-orange-600 hover:bg-orange-700">Create User</Button>
+              <Button onClick={saveUser}>
+                {editingUser ? 'Update' : 'Create'} User
+              </Button>
             </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
 
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Users</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{users.length}</div>
+            <p className="text-xs text-muted-foreground">All users</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Active Users</CardTitle>
+            <UserCheck className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {Array.isArray(users) ? users.filter(user => user.status === 'active').length : 0}
+            </div>
+            <p className="text-xs text-muted-foreground">Currently active</p>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Admins</CardTitle>
+            <Shield className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">
+              {Array.isArray(users) ? users.filter(user => user.role === 'admin').length : 0}
+            </div>
+            <p className="text-xs text-muted-foreground">Admin users</p>
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
-          <CardTitle>System Users</CardTitle>
+          <CardTitle>Users</CardTitle>
           <CardDescription>
-            Manage all system users and their role-based permissions
+            View and manage all system users
           </CardDescription>
         </CardHeader>
         <CardContent>
@@ -299,53 +359,87 @@ export const UserManagement = () => {
             <TableHeader>
               <TableRow>
                 <TableHead>Name</TableHead>
-                <TableHead>Department</TableHead>
+                <TableHead>Email</TableHead>
                 <TableHead>Role</TableHead>
-                <TableHead>Created</TableHead>
+                <TableHead>Business Unit</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Last Login</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {users.map((user) => (
-                <TableRow key={user.id}>
-                  <TableCell className="font-medium">{user.full_name || 'N/A'}</TableCell>
-                  <TableCell>{user.department || 'N/A'}</TableCell>
-                  <TableCell>
-                    <Badge className={getRoleBadgeColor(user.role)}>
-                      {user.role}
-                    </Badge>
+              {users.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center py-8">
+                    <Users className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">No users yet</h3>
+                    <p className="text-gray-600">Add your first user to get started</p>
                   </TableCell>
-                  <TableCell>{new Date(user.created_at).toLocaleDateString()}</TableCell>
-                  <TableCell>
-                    <div className="flex space-x-2">
-                      <Select
-                        value={user.role}
-                        onValueChange={(value: AppRole) => updateUserRole(user.id, value)}
-                      >
-                        <SelectTrigger className="w-40">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="user">User</SelectItem>
-                          <SelectItem value="project_manager">Project Manager</SelectItem>
-                          <SelectItem value="finance_manager">Finance Manager</SelectItem>
-                          {isAdmin && <SelectItem value="project_admin">Project Admin</SelectItem>}
-                          {isAdmin && <SelectItem value="admin">Admin</SelectItem>}
-                        </SelectContent>
-                      </Select>
-                      {user.id !== currentUser?.id && (
+                </TableRow>
+              ) : (
+                Array.isArray(users) ? users.map((user) => (
+                  <TableRow key={user.id}>
+                    <TableCell className="font-medium">{user.full_name}</TableCell>
+                    <TableCell>{user.email}</TableCell>
+                    <TableCell>
+                      <Badge className={getRoleBadgeColor(user.role)}>
+                        {user.role}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {user.team_name ? (
+                        <Badge variant="outline">{user.team_name}</Badge>
+                      ) : (
+                        <span className="text-gray-400">No unit assigned</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={user.is_active ? 'default' : 'destructive'}>
+                        {user.is_active ? 'Active' : 'Inactive'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
+                      {user.last_login ? new Date(user.last_login).toLocaleDateString() : 'Never'}
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex space-x-2">
                         <Button
-                          variant="destructive"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => openEditDialog(user)}
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => toggleUserStatus(user.id, user.is_active)}
+                          className={user.is_active ? 'text-red-600 hover:text-red-700' : 'text-green-600 hover:text-green-700'}
+                        >
+                          {user.is_active ? (
+                            <>
+                              <UserX className="w-4 h-4 mr-1" />
+                              Deactivate
+                            </>
+                          ) : (
+                            <>
+                              <UserCheck className="w-4 h-4 mr-1" />
+                              Activate
+                            </>
+                          )}
+                        </Button>
+                        <Button
+                          variant="outline"
                           size="sm"
                           onClick={() => deleteUser(user.id)}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
-                      )}
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                )) : []
+              )}
             </TableBody>
           </Table>
         </CardContent>

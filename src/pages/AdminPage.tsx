@@ -6,11 +6,10 @@ import { AppSidebar } from "@/components/AppSidebar";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import AdminDashboard from "@/components/AdminDashboard";
 import { useAuth } from "@/hooks/useAuth";
-import { useRole } from "@/hooks/useRole";
+
 
 const AdminPage = () => {
   const { user, loading } = useAuth();
-  const { isAdmin, loading: roleLoading } = useRole();
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -19,13 +18,7 @@ const AdminPage = () => {
     }
   }, [user, loading, navigate]);
 
-  useEffect(() => {
-    if (!roleLoading && !isAdmin) {
-      navigate('/');
-    }
-  }, [isAdmin, roleLoading, navigate]);
-
-  if (loading || roleLoading) {
+  if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
         <div className="text-center">
@@ -36,7 +29,7 @@ const AdminPage = () => {
     );
   }
 
-  if (!user || !isAdmin) {
+  if (!user) {
     return null;
   }
 
@@ -47,7 +40,6 @@ const AdminPage = () => {
           <AppSidebar 
             activeSection="admin" 
             setActiveSection={() => {}}
-            isAdmin={isAdmin}
           />
           <div className="flex-1 flex flex-col">
             <DashboardHeader />

@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { useToast } from '@/hooks/use-toast';
 import { useAuth } from '@/hooks/useAuth';
 import { Plus, Users, Search, UserMinus } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { useProjectRefresh } from '@/contexts/ProjectContext';
 
 interface TeamMember {
   id: string;
@@ -54,6 +55,7 @@ const ProjectTeamManagement = () => {
   });
   const { toast } = useToast();
   const { user } = useAuth();
+  const { triggerRefresh } = useProjectRefresh();
 
   useEffect(() => {
     fetchData();
@@ -63,46 +65,14 @@ const ProjectTeamManagement = () => {
     try {
       setLoading(true);
       
-      // Fetch team members with manual joins
-      const { data: teamData, error: teamError } = await supabase
-        .from('project_teams')
-        .select('*')
-        .order('created_at', { ascending: false });
+      // Fetch team members, projects, and profiles
+      const [teamData, projectsData, profilesData] = await Promise.all([
+        apiClient.request('/project-teams'),
+        apiClient.getProjects(),
+        apiClient.request('/auth/users')
+      ]);
 
-      if (teamError) throw teamError;
-
-      // Fetch projects
-      const { data: projectsData, error: projectsError } = await supabase
-        .from('projects')
-        .select('id, name');
-
-      if (projectsError) throw projectsError;
-
-      // Fetch profiles
-      const { data: profilesData, error: profilesError } = await supabase
-        .from('profiles')
-        .select('id, full_name, email, department');
-
-      if (profilesError) throw profilesError;
-
-      // Manually join the data
-      const enrichedTeamData = teamData?.map(member => {
-        const profile = profilesData?.find(p => p.id === member.user_id);
-        const project = projectsData?.find(p => p.id === member.project_id);
-        
-        return {
-          ...member,
-          profiles: profile ? {
-            full_name: profile.full_name || 'Unknown',
-            department: profile.department || 'Unknown'
-          } : null,
-          projects: project ? {
-            name: project.name
-          } : null
-        };
-      }) || [];
-
-      setTeamMembers(enrichedTeamData);
+      setTeamMembers(teamData || []);
       setProjects(projectsData || []);
       setProfiles(profilesData || []);
     } catch (error) {
@@ -128,20 +98,20 @@ const ProjectTeamManagement = () => {
         return;
       }
 
-      const { error } = await supabase
-        .from('project_teams')
-        .insert([newMember]);
-
-      if (error) throw error;
+      await apiClient.request('/project-teams', {
+        method: 'POST',
+        body: JSON.stringify(newMember)
+      });
 
       toast({
         title: "Success",
         description: "Team member added successfully"
       });
 
-      setNewMember({ project_id: '', user_id: '', role: 'member' });
       setIsAdding(false);
+      setNewMember({ project_id: '', user_id: '', role: 'member' });
       fetchData();
+      triggerRefresh(); // Trigger global refresh for all components
     } catch (error: any) {
       console.error('Error adding team member:', error);
       toast({
@@ -156,12 +126,9 @@ const ProjectTeamManagement = () => {
     if (!confirm('Are you sure you want to remove this team member?')) return;
 
     try {
-      const { error } = await supabase
-        .from('project_teams')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await apiClient.request(`/project-teams/${id}`, {
+        method: 'DELETE'
+      });
 
       toast({
         title: "Success",
@@ -169,6 +136,7 @@ const ProjectTeamManagement = () => {
       });
 
       fetchData();
+      triggerRefresh(); // Trigger global refresh for all components
     } catch (error: any) {
       console.error('Error removing team member:', error);
       toast({

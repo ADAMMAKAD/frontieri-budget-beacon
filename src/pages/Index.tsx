@@ -1,11 +1,10 @@
 
-import { useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
 import { SidebarProvider } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/AppSidebar";
 import { DashboardHeader } from "@/components/DashboardHeader";
 import { OverviewDashboard } from "@/components/OverviewDashboard";
-import { BudgetPlanning } from "@/components/BudgetPlanning";
+import BudgetPlanning from "@/components/BudgetPlanning";
 import BudgetAllocation from "@/components/BudgetAllocation";
 import BudgetTracking from "@/components/BudgetTracking";
 import Reporting from "@/components/Reporting";
@@ -19,43 +18,23 @@ import ApprovalWorkflows from "@/components/ApprovalWorkflows";
 import NotificationCenter from "@/components/NotificationCenter";
 import AdminDashboard from "@/components/AdminDashboard";
 import ProjectMilestones from "@/components/ProjectMilestones";
-import { useAuth } from "@/hooks/useAuth";
-import { useRole } from "@/hooks/useRole";
-import { useState } from "react";
+import AdvancedAnalyticsDashboard from "@/components/AdvancedAnalyticsDashboard";
+import RealTimeMonitor from "@/components/RealTimeMonitor";
+import AIResourceOptimizer from "@/components/AIResourceOptimizer";
+import { SettingsDialog } from "@/components/SettingsDialog";
+
+// Remove the duplicate import line that was here
 
 const Index = () => {
-  const [activeSection, setActiveSection] = useState("overview");
-  const { user, loading } = useAuth();
-  const { isAdmin, loading: roleLoading } = useRole();
-  const navigate = useNavigate();
+  const [activeSection, setActiveSection] = useState(() => {
+    // Get the saved section from localStorage, default to "overview"
+    return localStorage.getItem('activeSection') || "overview";
+  });
 
+  // Save activeSection to localStorage whenever it changes
   useEffect(() => {
-    if (!loading && !user) {
-      navigate('/auth');
-    }
-  }, [user, loading, navigate]);
-
-  // Redirect non-admin users away from admin section
-  useEffect(() => {
-    if (!roleLoading && activeSection === "admin" && !isAdmin) {
-      setActiveSection("overview");
-    }
-  }, [activeSection, isAdmin, roleLoading]);
-
-  if (loading || roleLoading) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 flex items-center justify-center">
-        <div className="text-center">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-          <p className="mt-2 text-gray-600">Loading...</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!user) {
-    return null;
-  }
+    localStorage.setItem('activeSection', activeSection);
+  }, [activeSection]);
 
   const renderContent = () => {
     try {
@@ -88,9 +67,20 @@ const Index = () => {
           return <ApprovalWorkflows />;
         case "notifications":
           return <NotificationCenter />;
+        case "analytics":
+          return <AdvancedAnalyticsDashboard />;
+        case "realtime":
+          return <RealTimeMonitor />;
+        case "ai-optimizer":
+          return <AIResourceOptimizer />;
         case "admin":
-          // Only render admin dashboard if user is admin
-          return isAdmin ? <AdminDashboard /> : <OverviewDashboard />;
+          return <AdminDashboard />;
+        case "settings":
+          return (
+            <div className="p-6">
+              <SettingsDialog />
+            </div>
+          );
         default:
           return <OverviewDashboard />;
       }
@@ -114,7 +104,6 @@ const Index = () => {
           <AppSidebar 
             activeSection={activeSection} 
             setActiveSection={setActiveSection}
-            isAdmin={isAdmin}
           />
           <div className="flex-1 flex flex-col">
             <DashboardHeader />

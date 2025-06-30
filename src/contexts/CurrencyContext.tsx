@@ -11,14 +11,14 @@ interface CurrencyConfig {
 }
 
 const CURRENCIES: Record<Currency, CurrencyConfig> = {
-  ETB: { code: 'ETB', symbol: 'ETB', name: 'Ethiopian Birr', rate: 56.8 },
+  ETB: { code: 'ETB', symbol: 'ETB', name: 'Ethiopian Birr', rate: 135.0 },
   USD: { code: 'USD', symbol: '$', name: 'US Dollar', rate: 1.0 },
 };
 
 interface CurrencyContextType {
   currency: Currency;
   setCurrency: (currency: Currency) => void;
-  formatCurrency: (amount: number) => string;
+  formatCurrency: (amount: number, currency?: Currency) => string;
   convertCurrency: (amount: number, from: Currency, to: Currency) => number;
   getCurrencyConfig: (currency: Currency) => CurrencyConfig;
   availableCurrencies: CurrencyConfig[];
@@ -37,14 +37,29 @@ export function CurrencyProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem('currency', newCurrency);
   };
 
-  const formatCurrency = (amount: number) => {
-    const config = CURRENCIES[currency];
-    const convertedAmount = convertCurrency(amount, 'USD', currency);
+  const formatCurrency = (amount: number, targetCurrency?: Currency) => {
+    const currencyToUse = targetCurrency || currency;
+    const config = CURRENCIES[currencyToUse];
     
-    if (currency === 'USD') {
-      return `${config.symbol}${convertedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+    // If targetCurrency is provided, assume the amount is already in that currency
+    // Otherwise, convert from USD to the current currency
+    const displayAmount = targetCurrency ? amount : convertCurrency(amount, 'USD', currencyToUse);
+    
+    // Ensure the amount is a valid number
+    const validAmount = isNaN(displayAmount) ? 0 : displayAmount;
+    
+    if (currencyToUse === 'USD') {
+      return new Intl.NumberFormat('en-US', {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(validAmount);
     } else {
-      return `${convertedAmount.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} ${config.symbol}`;
+      return `${new Intl.NumberFormat('en-US', {
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 0
+      }).format(validAmount)} ${config.symbol}`;
     }
   };
 

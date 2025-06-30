@@ -1,6 +1,6 @@
 
 import { useState, useEffect } from 'react';
-import { supabase } from '@/integrations/supabase/client';
+import { apiClient } from '@/lib/api';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -42,13 +42,8 @@ const BusinessUnitManagement = () => {
 
   const fetchBusinessUnits = async () => {
     try {
-      const { data, error } = await supabase
-        .from('business_units')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-      setBusinessUnits(data || []);
+      const response = await apiClient.getBusinessUnits();
+      setBusinessUnits(response.business_units || []);
     } catch (error) {
       console.error('Error fetching business units:', error);
       toast({
@@ -66,31 +61,22 @@ const BusinessUnitManagement = () => {
     
     try {
       if (editingUnit) {
-        const { error } = await supabase
-          .from('business_units')
-          .update({
-            name: formData.name,
-            description: formData.description,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingUnit.id);
-
-        if (error) throw error;
+        await apiClient.updateBusinessUnit(editingUnit.id, {
+          name: formData.name,
+          description: formData.description,
+          updated_at: new Date().toISOString()
+        });
         
         toast({
           title: "Success",
           description: "Business unit updated successfully"
         });
       } else {
-        const { error } = await supabase
-          .from('business_units')
-          .insert([{
-            name: formData.name,
-            description: formData.description,
-            manager_id: user?.id
-          }]);
-
-        if (error) throw error;
+        await apiClient.createBusinessUnit({
+          name: formData.name,
+          description: formData.description,
+          manager_id: user?.id
+        });
         
         toast({
           title: "Success",
@@ -124,14 +110,9 @@ const BusinessUnitManagement = () => {
 
   const handleDelete = async (id: string) => {
     if (!confirm('Are you sure you want to delete this business unit?')) return;
-
+  
     try {
-      const { error } = await supabase
-        .from('business_units')
-        .delete()
-        .eq('id', id);
-
-      if (error) throw error;
+      await apiClient.deleteBusinessUnit(id);
       
       toast({
         title: "Success",
